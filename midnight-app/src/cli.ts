@@ -1,128 +1,133 @@
 /**
- * CLI for interacting with midnight-app contract
+ * Interactive CLI for the sealed-bid auction.
+ *
+ * Lets you play every role in the auction from one terminal: switch between
+ * named identities (seller, alice, bob, ...), place sealed bids, close the
+ * auction, reveal, and finalize — and, crucially for the demo, inspect the
+ * raw on-chain public state side by side with your local private state.
  */
 import { createInterface } from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
 import { WebSocket } from 'ws';
-import { Buffer } from 'buffer';
 
-// Midnight SDK imports
-import { findDeployedContract } from '@midnight-ntwrk/midnight-js-contracts';
-import { httpClientProofProvider } from '@midnight-ntwrk/midnight-js-http-client-proof-provider';
-import { indexerPublicDataProvider } from '@midnight-ntwrk/midnight-js-indexer-public-data-provider';
-import { levelPrivateStateProvider } from '@midnight-ntwrk/midnight-js-level-private-state-provider';
-import { NodeZkConfigProvider } from '@midnight-ntwrk/midnight-js-node-zk-config-provider';
-import { resolveNetwork, getOrCreateSeed, getDeployment } from './network';
-import { createWallet, persistWalletState, unshieldedToken, type WalletContext } from './wallet';
-import { CompiledContract } from '@midnight-ntwrk/midnight-js-protocol/compact-js';
+import { resolveNetwork, getOrCreateSeed, getDeployment, recordDeployment } from './network';
+import { createWallet, persistWalletState, unshieldedToken } from './wallet';
+import {
+  createProviders,
+  connectAuction,
+  deployAuction,
+  readAuctionLedger,
+  setActiveContract,
+  publicKeyHex,
+  type AuctionView,
+} from './auction-api';
+import {
+  currentIdentity,
+  setCurrentIdentity,
+  listIdentities,
+  recordBid,
+  getBid,
+} from './identities';
 
 // Enable WebSocket for GraphQL subscriptions
 // @ts-expect-error Required for wallet sync
 globalThis.WebSocket = WebSocket;
 
-// Must match the privateStateId used at deploy time so the CLI reconnects to
-// the same private state. The hello-world contract has no witnesses (empty state).
-const PRIVATE_STATE_ID = 'helloWorldPrivateState';
-
 const { network, config: networkConfig } = resolveNetwork();
 const SEED = getOrCreateSeed(network);
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const zkConfigPath = path.resolve(__dirname, '..', 'contracts', 'managed', 'hello-world');
-
-// Load compiled contract
-const contractPath = path.join(zkConfigPath, 'contract', 'index.js');
-
-// Check if contract is compiled
-if (!fs.existsSync(contractPath)) {
-  console.error('\n❌ Contract not compiled! Run: npm run compile\n');
-  process.exit(1);
+function short(hex: string): string {
+  return hex.length <= 18 ? hex : `${hex.slice(0, 10)}…${hex.slice(-6)}`;
 }
 
-const HelloWorld = await import(pathToFileURL(contractPath).href);
-
-const compiledContract = CompiledContract.make('hello-world', HelloWorld.Contract).pipe(
-  CompiledContract.withVacantWitnesses,
-  CompiledContract.withCompiledFileAssets(zkConfigPath),
-);
-
-// ─── Providers ─────────────────────────────────────────────────────────────────
-
-async function createProviders(walletCtx: WalletContext) {
-  // The SDK requires the private-state password to be at least 16 characters.
-  // The default below is a placeholder for local devnet only — set a strong
-  // password via PRIVATE_STATE_PASSWORD when you move to a non-local target.
-  const privateStatePassword = process.env.PRIVATE_STATE_PASSWORD?.trim() || 'Local-Devnet-Development-Placeholder-1';
-
-  const walletProvider = {
-    // In Midnight.js 4.1.x the WalletProvider interface returns the key objects
-    // (CoinPublicKey / EncPublicKey) directly — no longer hex strings.
-    getCoinPublicKey: () => walletCtx.shieldedSecretKeys.coinPublicKey,
-    getEncryptionPublicKey: () => walletCtx.shieldedSecretKeys.encryptionPublicKey,
-    async balanceTx(tx: any, ttl?: Date) {
-      // balanceUnboundTransaction -> finalizeRecipe is the complete balancing
-      // path in wallet-sdk 1.x; the earlier explicit signRecipe step is gone.
-      const recipe = await walletCtx.wallet.balanceUnboundTransaction(
-        tx,
-        { shieldedSecretKeys: walletCtx.shieldedSecretKeys, dustSecretKey: walletCtx.dustSecretKey },
-        { ttl: ttl ?? new Date(Date.now() + 30 * 60 * 1000) },
-      );
-      return walletCtx.wallet.finalizeRecipe(recipe);
-    },
-    submitTx: (tx: any) => walletCtx.wallet.submitTransaction(tx) as any,
-  };
-
-  const zkConfigProvider = new NodeZkConfigProvider(zkConfigPath);
-  const accountId = walletCtx.unshieldedKeystore.getBech32Address().toString();
-
-  return {
-    privateStateProvider: levelPrivateStateProvider({
-      privateStateStoreName: 'hello-world-state',
-      accountId,
-      privateStoragePasswordProvider: () => privateStatePassword,
-    }),
-    publicDataProvider: indexerPublicDataProvider(networkConfig.indexer, networkConfig.indexerWS),
-    zkConfigProvider,
-    proofProvider: httpClientProofProvider(networkConfig.proofServer, zkConfigProvider),
-    walletProvider,
-    midnightProvider: walletProvider,
-  };
+function printStatus(view: AuctionView, contractAddress: string): void {
+  console.log('\n─── On-chain public state (what everyone sees) ─────────────────');
+  console.log(`  Contract:  ${short(contractAddress)}`);
+  console.log(`  Item:      ${view.item}`);
+  console.log(`  Phase:     ${view.phase.toUpperCase()}`);
+  console.log(`  Seller id: ${short(view.owner)}`);
+  console.log(`  Sealed bids (${view.bidderCount}):`);
+  for (const b of view.bids) {
+    console.log(`    bidder ${short(b.bidderId)} → commitment ${short(b.commitment)}`);
+  }
+  if (view.bids.length === 0) console.log('    (none yet)');
+  console.log(`  Highest revealed bid: ${view.highestBid > 0n ? view.highestBid.toLocaleString() : '—'}`);
+  console.log(`  Winner: ${view.winner ? short(view.winner) : '—'}`);
+  console.log('  ℹ Commitments are hiding + binding: bid amounts are NOT derivable');
+  console.log('    from anything above. Losing amounts never touch the chain.\n');
 }
 
-// ─── Main CLI ──────────────────────────────────────────────────────────────────
+/** Map common circuit assert messages to friendly hints. */
+function explainFailure(message: string): string | null {
+  const hints: Array<[string, string]> = [
+    ['bidding is closed', 'The auction is past its bidding phase.'],
+    ['already placed a bid', 'This identity already has a sealed bid — switch identity to bid again.'],
+    ['only the seller can', 'Only the seller identity that created this auction can do that.'],
+    ['not in reveal phase', 'Reveals only work after the seller closes bidding.'],
+    ['no sealed bid found', 'This identity never placed a bid on this auction.'],
+    ['does not match sealed bid', 'Local bid record does not open the on-chain commitment.'],
+    ['bidding is not open', 'Bidding is already closed.'],
+    ['not in reveal', 'Wrong phase for that action.'],
+  ];
+  for (const [needle, hint] of hints) {
+    if (message.includes(needle)) return hint;
+  }
+  return null;
+}
 
 async function main() {
   console.log('\n╔══════════════════════════════════════════════════════════════╗');
-  console.log('║                   midnight-app CLI                           ║');
+  console.log('║         Sealed — private sealed-bid auctions on Midnight     ║');
   console.log('╚══════════════════════════════════════════════════════════════╝\n');
 
   const rl = createInterface({ input: stdin, output: stdout });
 
-  // Check for deployment
+  // Piped/scripted input support: lines that arrive while no question is
+  // pending (e.g. during wallet sync) would be dropped by readline and EOF
+  // would reject the next question. Queue them instead, and report EOF as
+  // null so the menu loop can exit cleanly.
+  const bufferedLines: string[] = [];
+  const lineWaiters: Array<(line: string | null) => void> = [];
+  let inputClosed = false;
+  rl.on('line', (line) => {
+    const waiter = lineWaiters.shift();
+    if (waiter) waiter(line);
+    else bufferedLines.push(line);
+  });
+  rl.on('close', () => {
+    inputClosed = true;
+    for (const waiter of lineWaiters.splice(0)) waiter(null);
+  });
+  async function ask(prompt: string): Promise<string | null> {
+    stdout.write(prompt);
+    if (bufferedLines.length > 0) {
+      const line = bufferedLines.shift()!;
+      stdout.write(`${line}\n`);
+      return line;
+    }
+    if (inputClosed) return null;
+    return new Promise((resolve) => lineWaiters.push(resolve));
+  }
+
   const deployment = getDeployment(network);
   if (!deployment) {
     console.error(`No deploy on file for network ${network}. Run \`npm run setup -- --network ${network}\` first.`);
     process.exit(1);
   }
-  console.log(`  Contract: ${deployment.address}`);
+  let contractAddress: string = deployment.address;
+  console.log(`  Contract: ${contractAddress}`);
   console.log(`  Network: ${network}\n`);
 
+  let walletCtx: Awaited<ReturnType<typeof createWallet>> | undefined;
   try {
-    const seed = SEED;
-
     console.log('  Connecting to wallet...');
-    const walletCtx = await createWallet({ network, networkConfig, seed });
+    walletCtx = await createWallet({ network, networkConfig, seed: SEED });
     const restoredCount = Object.values(walletCtx.restored).filter(Boolean).length;
     if (restoredCount > 0) {
       console.log(`  Restored ${restoredCount}/3 child wallets from .midnight-wallet-state — sync will resume from saved point.`);
     }
 
     console.log('  Syncing with network...');
-    console.log('  ℹ  This may take several minutes depending on network size.');
-    console.log('     RPC disconnection messages during sync are normal and can be safely ignored.\n');
     const syncStart = Date.now();
     const syncInterval = setInterval(() => {
       const elapsed = Math.round((Date.now() - syncStart) / 1000);
@@ -132,104 +137,174 @@ async function main() {
     clearInterval(syncInterval);
     process.stdout.write('\r  ✓ Synced with network.                                      \n');
 
-    // Persist sync state so the next run doesn't have to redo this work.
     await persistWalletState(network, walletCtx);
     const balance = state.unshielded.balances[unshieldedToken().raw] ?? 0n;
     console.log(`  Balance: ${balance.toLocaleString()} tNight\n`);
 
-    // Surface a faucet hint when a public-network wallet has 0 tNIGHT.
-    // Reads (option 2) work without funds, but writes (option 1) need DUST
-    // generated from registered NIGHT — without this hint the next failure
-    // mode is a confusing "Insufficient Funds" deep inside the tx builder.
-    if (balance === 0n && network !== 'undeployed' && networkConfig.faucet) {
-      const address = walletCtx.unshieldedKeystore.getBech32Address();
-      console.log('  ⚠ Wallet has no tNight. Fund it from the faucet to send transactions:');
-      console.log(`     ${networkConfig.faucet}`);
-      console.log(`     Wallet address: ${address}\n`);
-    }
-
-    // Setup providers and connect to contract
-    console.log('  Connecting to contract...');
-    const providers = await createProviders(walletCtx);
-
-    const deployed: any = await findDeployedContract(providers, {
-      compiledContract: compiledContract as any,
-      contractAddress: deployment.address,
-      privateStateId: PRIVATE_STATE_ID,
-      initialPrivateState: {},
-    });
-
+    console.log('  Connecting to auction contract...');
+    const providers = await createProviders(walletCtx, networkConfig);
+    setActiveContract(contractAddress);
+    let deployed: any = await connectAuction(providers, contractAddress);
     console.log('  ✅ Connected!\n');
 
-    // Interactive CLI loop
     let running = true;
     while (running) {
+      const me = currentIdentity();
       console.log('─── Menu ───────────────────────────────────────────────────────');
-      console.log('  1. Store a message');
-      console.log('  2. Read current message');
-      console.log('  3. Check wallet balance');
-      console.log('  4. Exit\n');
+      console.log(`  Acting as: ${me.name}`);
+      console.log('  1. Show auction status (on-chain public view)');
+      console.log('  2. Switch identity');
+      console.log('  3. Place sealed bid');
+      console.log('  4. Close bidding        (seller only)');
+      console.log('  5. Reveal my bid');
+      console.log('  6. Finalize auction     (seller only)');
+      console.log('  7. Show my private state (local only)');
+      console.log('  8. Create new auction   (you become the seller)');
+      console.log('  9. Exit\n');
 
-      const choice = await rl.question('  Your choice: ');
+      const rawChoice = await ask('  Your choice: ');
+      if (rawChoice === null) {
+        console.log('\n  Input ended — exiting.\n');
+        break;
+      }
+      const choice = rawChoice.trim();
 
-      switch (choice.trim()) {
-        case '1': {
-          const message = await rl.question('  Enter your message: ');
-          console.log('\n  Submitting transaction (this may take 30-60 seconds)...');
-          try {
-            const tx = await deployed.callTx.storeMessage(message);
-            console.log(`\n  ✅ Message stored: "${message}"`);
-            console.log(`  Transaction ID: ${tx.public.txId}`);
-            console.log(`  Block height: ${tx.public.blockHeight}\n`);
-          } catch (error) {
-            console.error('\n  ❌ Failed:', error instanceof Error ? error.message : error);
+      try {
+        switch (choice) {
+          case '1': {
+            const view = await readAuctionLedger(providers, contractAddress);
+            printStatus(view, contractAddress);
+            break;
           }
-          break;
-        }
 
-        case '2': {
-          console.log('\n  Reading message from blockchain...');
-          try {
-            const contractState = await providers.publicDataProvider.queryContractState(deployment.address);
-            if (contractState) {
-              const ledgerState = HelloWorld.ledger(contractState.data);
-              const message = Buffer.from(ledgerState.message).toString();
-              console.log(`\n  📋 Current message: "${message}"\n`);
-            } else {
-              console.log('\n  📋 No message found (contract state empty)\n');
+          case '2': {
+            const names = listIdentities();
+            console.log(`\n  Known identities: ${names.length ? names.join(', ') : '(none yet)'}`);
+            const name = ((await ask('  Identity name (new names are created): ')) ?? '').trim();
+            if (!name) {
+              console.log('\n  ❌ Name cannot be empty.\n');
+              break;
             }
-          } catch (error) {
-            console.error('\n  ❌ Failed:', error instanceof Error ? error.message : error);
+            setCurrentIdentity(name);
+            console.log(`\n  ✅ Now acting as "${name}".\n`);
+            break;
           }
-          break;
+
+          case '3': {
+            const amountStr = ((await ask('  Bid amount (positive integer): ')) ?? '').trim();
+            if (!/^[0-9]+$/.test(amountStr) || BigInt(amountStr) <= 0n) {
+              console.log('\n  ❌ Enter a positive integer amount.\n');
+              break;
+            }
+            recordBid(me.name, contractAddress, BigInt(amountStr));
+            console.log('\n  Sealing bid and proving (30-60s)...');
+            const tx = await deployed.callTx.placeBid();
+            console.log(`\n  ✅ Sealed bid placed as "${me.name}".`);
+            console.log(`  Transaction: ${tx.public.txId}`);
+            console.log('  Your amount and nonce stayed on this machine — only the');
+            console.log('  commitment went on-chain.\n');
+            break;
+          }
+
+          case '4': {
+            console.log('\n  Closing bidding (30-60s)...');
+            const tx = await deployed.callTx.closeBidding();
+            console.log(`\n  ✅ Bidding closed. Reveal phase begins. (tx ${short(tx.public.txId)})\n`);
+            break;
+          }
+
+          case '5': {
+            if (!getBid(me.name, contractAddress)) {
+              console.log(`\n  ❌ "${me.name}" has no sealed bid on this auction.\n`);
+              break;
+            }
+            console.log('\n  Proving your reveal in zero knowledge (30-60s)...');
+            const tx = await deployed.callTx.revealBid();
+            const view = await readAuctionLedger(providers, contractAddress);
+            const myId = await publicKeyHex(me.secretKey);
+            console.log(`\n  ✅ Reveal accepted. (tx ${short(tx.public.txId)})`);
+            if (view.winner === myId) {
+              console.log(`  🏆 You currently lead at ${view.highestBid.toLocaleString()}.\n`);
+            } else {
+              console.log('  You did not take the lead — and your amount stays private forever.\n');
+            }
+            break;
+          }
+
+          case '6': {
+            console.log('\n  Finalizing auction (30-60s)...');
+            await deployed.callTx.finalize();
+            const view = await readAuctionLedger(providers, contractAddress);
+            console.log('\n  ✅ Auction finalized.');
+            if (view.winner) {
+              console.log(`  🏆 Winner: bidder ${short(view.winner)} at ${view.highestBid.toLocaleString()}.`);
+              console.log('  All losing bid amounts remain sealed forever.\n');
+            } else {
+              console.log('  No bids were revealed — no winner.\n');
+            }
+            break;
+          }
+
+          case '7': {
+            const bid = getBid(me.name, contractAddress);
+            console.log('\n─── Your private state (LOCAL ONLY — never sent to chain) ──────');
+            console.log(`  Identity:   ${me.name}`);
+            console.log(`  Secret key: ${short(me.secretKey)} (full key in .sealed-identities.json)`);
+            console.log(`  On-chain id: ${short(await publicKeyHex(me.secretKey))} (= hash(secret key))`);
+            if (bid) {
+              console.log(`  Sealed bid on this auction:`);
+              console.log(`    amount: ${BigInt(bid.amount).toLocaleString()}`);
+              console.log(`    nonce:  ${short(bid.nonce)}`);
+            } else {
+              console.log('  No sealed bid on this auction yet.');
+            }
+            console.log('');
+            break;
+          }
+
+          case '8': {
+            const item = ((await ask('  What are you auctioning? ')) ?? '').trim();
+            if (!item) {
+              console.log('\n  ❌ Item description cannot be empty.\n');
+              break;
+            }
+            console.log(`\n  Deploying new auction as seller "${me.name}" (30-60s)...`);
+            const newAddr = await deployAuction(providers, item);
+            recordDeployment(network, newAddr, walletCtx.unshieldedKeystore.getBech32Address().toString());
+            contractAddress = newAddr;
+            setActiveContract(newAddr);
+            deployed = await connectAuction(providers, newAddr);
+            console.log(`\n  ✅ New auction live at ${short(newAddr)} — "${item}".`);
+            console.log(`  Seller identity: "${me.name}".\n`);
+            break;
+          }
+
+          case '9':
+            running = false;
+            console.log('\n  👋 Goodbye!\n');
+            break;
+
+          default:
+            console.log('\n  ❌ Invalid choice. Please enter 1-9.\n');
         }
-
-        case '3': {
-          console.log('\n  Checking balance...');
-          const currentState = await walletCtx.wallet.waitForSyncedState();
-          const currentBalance = currentState.unshielded.balances[unshieldedToken().raw] ?? 0n;
-          const dustBalance = currentState.dust.balance(new Date());
-          console.log(`\n  tNight: ${currentBalance.toLocaleString()}`);
-          console.log(`  DUST: ${dustBalance.toLocaleString()}\n`);
-          break;
-        }
-
-        case '4':
-          running = false;
-          console.log('\n  👋 Goodbye!\n');
-          break;
-
-        default:
-          console.log('\n  ❌ Invalid choice. Please enter 1-4.\n');
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`\n  ❌ Failed: ${message}`);
+        const hint = explainFailure(message);
+        if (hint) console.error(`  💡 ${hint}`);
+        console.log('');
       }
     }
 
     await persistWalletState(network, walletCtx);
-    await walletCtx.wallet.stop();
   } catch (error) {
     console.error('\n❌ Error:', error instanceof Error ? error.message : error);
   } finally {
     rl.close();
+    // Always stop the wallet: open indexer/node websockets otherwise keep the
+    // process alive forever, including on the error path.
+    if (walletCtx) await walletCtx.wallet.stop().catch(() => {});
+    process.exit(0);
   }
 }
 
