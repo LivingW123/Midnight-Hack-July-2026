@@ -63,6 +63,7 @@ function explainFailure(message: string): string | null {
     ['bidding is closed', 'The auction is past its bidding phase.'],
     ['already placed a bid', 'This identity already has a sealed bid — switch identity to bid again.'],
     ['only the seller can', 'Only the seller identity that created this auction can do that.'],
+    ['auction is not in reveal phase', 'Finalizing needs the REVEAL phase — the seller must close bidding first.'],
     ['not in reveal phase', 'Reveals only work after the seller closes bidding.'],
     ['no sealed bid found', 'This identity never placed a bid on this auction.'],
     ['does not match sealed bid', 'Local bid record does not open the on-chain commitment.'],
