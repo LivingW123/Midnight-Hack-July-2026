@@ -1,0 +1,118 @@
+pragma language_version >= 0.23;
+
+import CompactStandardLibrary;
+
+// ── The Number Game (Keynesian beauty contest) ─────────────────────────────
+// Everyone seals a guess from 1 to 100. When sealing closes, guesses are
+// revealed and the target is fixed at 2/3 of the mean; closest guess wins.
+// The game is impossible on a transparent chain (late players would read the
+// running average) — sealed commitments make all guesses provably
+// simultaneous, with no host who could peek.
+//
+// Phases: sealing → reveal → reckoning → closed.
+// Unrevealed guesses forfeit, exactly like unrevealed auction bids.
+
+export enum Phase { sealing, reveal, reckoning, closed }
+
+export ledger phase: Phase;
+export ledger question: Opaque<"string">;
+export ledger owner: Bytes<32>;
+export ledger entries: Map<Bytes<32>, Bytes<32>>;
+export ledger entryCount: Counter;
+// Filled during reveal — this public map IS the histogram the game is about.
+export ledger guesses: Map<Bytes<32>, Uint<64>>;
+export ledger revealedSum: Uint<64>;
+export ledger revealedCount: Counter;
+// Fixed by lockTarget: target = floor((2 * revealedSum) / (3 * revealedCount)).
+export ledger target: Uint<64>;
+export ledger bestDistance: Uint<64>;
+export ledger champion: Bytes<32>;
+export ledger hasChampion: Boolean;
+
+// Private data — a guess stays on the player's machine until reveal.
+witness localSecretKey(): Bytes<32>;
+witness guessValue(): Uint<64>;
+witness guessNonce(): Bytes<32>;
+
+constructor(gameQuestion: Opaque<"string">) {
+  question = disclose(gameQuestion);
+  phase = Phase.sealing;
+  owner = disclose(publicKey(localSecretKey()));
+}
+
+// Same derivation as the auction contract, so an identity keeps one on-chain
+// id across both markets.
+export circuit publicKey(sk: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<2, Bytes<32>>>([pad(32, "sealed:pk:"), sk]);
+}
+
+export circuit sealGuess(): [] {
+  assert(phase == Phase.sealing, "sealing is over");
+  const g = guessValue();
+  assert(g >= 1, "guess must be at least 1");
+  assert(g <= 100, "guess must be at most 100");
+  const id = disclose(publicKey(localSecretKey()));
+  assert(!entries.member(id), "this identity already sealed a guess");
+  const commitment = persistentCommit<Uint<64>>(g, guessNonce());
+  entries.insert(id, disclose(commitment));
+  entryCount.increment(1);
+}
+
+export circuit closeSealing(): [] {
+  assert(phase == Phase.sealing, "sealing is not open");
+  assert(publicKey(localSecretKey()) == owner, "only the host can close sealing");
+  phase = Phase.reveal;
+}
+
+export circuit revealGuess(): [] {
+  assert(phase == Phase.reveal, "not in reveal phase");
+  const id = disclose(publicKey(localSecretKey()));
+  assert(entries.member(id), "no sealed guess for this identity");
+  assert(!guesses.member(id), "this guess was already revealed");
+  const g = guessValue();
+  const commitment = persistentCommit<Uint<64>>(g, guessNonce());
+  assert(entries.lookup(id) == commitment, "reveal does not match sealed guess");
+  const revealed = disclose(g);
+  guesses.insert(id, revealed);
+  revealedSum = (revealedSum + revealed) as Uint<64>;
+  revealedCount.increment(1);
+}
+
+// Circuits cannot divide, so the caller supplies the quotient and the circuit
+// verifies it with multiplications only:
+//   3*count*target <= 2*sum < 3*count*(target + 1)
+// which pins target to exactly floor((2*sum) / (3*count)). Anyone may call
+// this — a wrong quotient simply cannot prove.
+export circuit lockTarget(claimedTarget: Uint<64>): [] {
+  assert(phase == Phase.reveal, "not in reveal phase");
+  assert(revealedCount > 0, "nothing revealed");
+  const t = disclose(claimedTarget);
+  assert(t <= 100, "target out of range");
+  const doubleSum = revealedSum * 2;
+  const denom = revealedCount * 3;
+  assert(denom * t <= doubleSum, "target too high");
+  assert(doubleSum < denom * (t + 1), "target too low");
+  target = t;
+  phase = Phase.reckoning;
+}
+
+// Score any revealed entrant — fully public math, so anyone can crown anyone.
+// Ties keep the earlier champion.
+export circuit score(entrant: Bytes<32>): [] {
+  assert(phase == Phase.reckoning, "not in the reckoning");
+  const e = disclose(entrant);
+  assert(guesses.member(e), "entrant never revealed a guess");
+  const g = guesses.lookup(e);
+  const dist = g >= target ? (g - target) as Uint<64> : (target - g) as Uint<64>;
+  if (!hasChampion || dist < bestDistance) {
+    bestDistance = dist;
+    champion = e;
+    hasChampion = true;
+  }
+}
+
+export circuit finalize(): [] {
+  assert(phase == Phase.reckoning, "not in the reckoning");
+  assert(publicKey(localSecretKey()) == owner, "only the host can finalize");
+  phase = Phase.closed;
+}

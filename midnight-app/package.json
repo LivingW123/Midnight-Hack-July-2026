@@ -6,7 +6,7 @@
   "author": "",
   "license": "MIT",
   "scripts": {
-    "compile": "compact compile contracts/sealed-auction.compact contracts/managed/sealed-auction",
+    "compile": "compact compile contracts/sealed-auction.compact contracts/managed/sealed-auction && compact compile contracts/number-game.compact contracts/managed/number-game",
     "build": "npx tsc --noEmit || true",
     "setup": "npx tsx src/setup.ts",
     "deploy": "npx tsx src/deploy.ts",
