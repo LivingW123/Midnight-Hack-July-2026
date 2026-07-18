@@ -20,8 +20,10 @@ npm run compile
 
 echo "==> 4/4 Local devnet (node + indexer + proof server)"
 if docker info >/dev/null 2>&1; then
-  ARCH="$(uname -m)"
-  if [ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]; then
+  # The known arm64 proof-server bug is specific to Docker Desktop on Apple
+  # Silicon Macs — ARM Linux/WSL runs the official image fine, so only warn
+  # on Darwin.
+  if [ "$(uname -s)" = "Darwin" ] && { [ "$(uname -m)" = "arm64" ] || [ "$(uname -m)" = "aarch64" ]; }; then
     echo "NOTE: Apple Silicon detected. Official arm64 proof-server image has a known bug."
     echo "If proofs fail, edit docker-compose.yml to use bricktowers/proof-server:latest"
   fi
