@@ -1,12 +1,12 @@
 {
-  "name": "midnight-app",
+  "name": "sealed-auction",
   "version": "1.0.0",
   "type": "module",
-  "description": "A Midnight Network application created with create-mn-app",
+  "description": "Sealed — private sealed-bid auctions on Midnight",
   "author": "",
   "license": "MIT",
   "scripts": {
-    "compile": "compact compile contracts/hello-world.compact contracts/managed/hello-world",
+    "compile": "compact compile contracts/sealed-auction.compact contracts/managed/sealed-auction",
     "build": "npx tsc --noEmit || true",
     "setup": "npx tsx src/setup.ts",
     "deploy": "npx tsx src/deploy.ts",

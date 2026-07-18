@@ -1,0 +1,71 @@
+pragma language_version >= 0.23;
+
+import CompactStandardLibrary;
+
+// ── Sealed-bid first-price auction ─────────────────────────────────────────
+// Bids go on-chain only as hiding+binding commitments. At reveal, each bidder
+// proves in zero knowledge that their witness (amount, nonce) opens their
+// commitment; the amount is disclosed to the ledger ONLY if it takes the lead.
+// Losing bid values never appear on-chain.
+
+export enum Phase { open, reveal, closed }
+
+export ledger phase: Phase;
+export ledger item: Opaque<"string">;
+export ledger owner: Bytes<32>;
+export ledger bids: Map<Bytes<32>, Bytes<32>>;
+export ledger bidderCount: Counter;
+export ledger highestBid: Uint<64>;
+export ledger winner: Bytes<32>;
+
+// Private data — lives only in the caller's local state, never on-chain.
+witness localSecretKey(): Bytes<32>;
+witness bidAmount(): Uint<64>;
+witness bidNonce(): Bytes<32>;
+
+constructor(itemDesc: Opaque<"string">) {
+  item = disclose(itemDesc);
+  phase = Phase.open;
+  owner = disclose(publicKey(localSecretKey()));
+}
+
+// Pseudonymous on-chain identity: hash of a local secret, domain-separated.
+export circuit publicKey(sk: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<2, Bytes<32>>>([pad(32, "sealed:pk:"), sk]);
+}
+
+export circuit placeBid(): [] {
+  assert(phase == Phase.open, "bidding is closed");
+  const amount = bidAmount();
+  assert(amount > 0, "bid must be positive");
+  const id = disclose(publicKey(localSecretKey()));
+  assert(!bids.member(id), "this identity already placed a bid");
+  const commitment = persistentCommit<Uint<64>>(amount, bidNonce());
+  bids.insert(id, disclose(commitment));
+  bidderCount.increment(1);
+}
+
+export circuit closeBidding(): [] {
+  assert(phase == Phase.open, "bidding is not open");
+  assert(publicKey(localSecretKey()) == owner, "only the seller can close bidding");
+  phase = Phase.reveal;
+}
+
+export circuit revealBid(): [] {
+  assert(phase == Phase.reveal, "not in reveal phase");
+  const id = disclose(publicKey(localSecretKey()));
+  assert(bids.member(id), "no sealed bid found for this identity");
+  const amount = bidAmount();
+  const commitment = persistentCommit<Uint<64>>(amount, bidNonce());
+  assert(bids.lookup(id) == commitment, "reveal does not match sealed bid");
+  if (disclose(amount > highestBid)) {
+    highestBid = disclose(amount);
+    winner = id;
+  }
+}
+
+export circuit finalize(): [] {
+  assert(phase == Phase.reveal, "auction is not in reveal phase");
+  assert(publicKey(localSecretKey()) == owner, "only the seller can finalize");
+  phase = Phase.closed;
+}
