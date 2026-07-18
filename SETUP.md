@@ -1,6 +1,6 @@
 # Midnight Dev Stack — Team Setup
 
-Everything you need to build on Midnight: Compact compiler, proof server (Docker), Lace wallet, and the scaffolded DApp in `midnight-app/`.
+Everything you need to build on Midnight: Compact compiler, proof server (Docker), Lace wallet, and the **Sealed** sealed-bid auction DApp in `midnight-app/` (see the [root README](README.md) for what it does).
 
 > **Windows users: Midnight is not supported natively on Windows.** Use WSL (Ubuntu). All commands below run inside WSL, not PowerShell. Docker Desktop must have the WSL 2 backend enabled (it is by default).
 
@@ -61,7 +61,7 @@ Download the [Compact VSIX](https://raw.githubusercontent.com/midnight-ntwrk/rel
 
 ## 6. The app (`midnight-app/`)
 
-Scaffolded with `create-mn-app` (hello-world template). Already compiled and type-checked. To run:
+The Sealed auction DApp (originally scaffolded with `create-mn-app`). To run:
 
 ```bash
 cd midnight-app
