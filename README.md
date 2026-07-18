@@ -71,6 +71,31 @@ randomness and reveal on their own, so a solo demo always has competition. They 
 real bidders (own secret keys, own sealed bids, same proof pipeline), and their
 amounts are hidden from you exactly as yours are hidden from them.
 
+## The Number Game
+
+Same primitive, second market — at **http://localhost:4600/game.html**. The classic
+Keynesian beauty contest: everyone seals a number from 1–100; closest to **⅔ of the
+mean** wins. Smart players reason "the average is 50, so I'll say 33 — but they'll
+think that too, so 22…" and perfectly rational players spiral to 0. Real people
+don't, which is the whole game: winning means modeling how deep *actual humans*
+think.
+
+This game is **impossible on a transparent chain** — whoever guesses last would just
+read the running average off the ledger — and running it off-chain needs a host you
+trust not to peek. Sealed commitments give provably simultaneous guesses with no
+trusted host: the first fair, hostless beauty contest.
+
+Five house players join every game, each an explicit level of reasoning: `meridian`
+(level‑0, ~50), `vesper` (level‑1, ~33), `orpheus` (level‑2, ~22), `juno` (pure
+chaos), and `the-theorist` (plays the Nash equilibrium, almost never wins). Watch
+the histogram build as reveals land — it's a live experiment in behavioral
+economics, settled by zero-knowledge proofs.
+
+One more circuit trick worth judging: Compact circuits can't divide, so the ⅔-mean
+target is fixed by a **verified-quotient proof** — the caller supplies the target
+and the contract proves `3·count·target ≤ 2·sum < 3·count·(target+1)` with
+multiplications only. A wrong target cannot generate a proof.
+
 ## Demo walkthrough (what the video shows)
 
 1. `npm run cli` — connect to the deployed auction ("Vintage Moog synthesizer").
