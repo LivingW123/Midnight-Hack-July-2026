@@ -233,12 +233,14 @@ async function apiGameStatus(): Promise<any> {
   }
   const myGuess = gameAddress ? getBid(me.name, gameAddress) ?? null : null;
   const job = activeJob ?? lastJob;
+  // Pseudonym → display name for every identity this machine knows (house
+  // players, your paddles, e2e fixtures). Ids the server can't name stay
+  // pseudonymous — exactly what an outside observer of the chain would see.
   const players = Object.fromEntries(
     await Promise.all(
-      [...HOUSE_PLAYERS.map((p) => p.name), me.name].map(async (n) => [
-        await publicKeyHex(getOrCreateIdentity(n).secretKey),
-        n,
-      ]),
+      [...new Set([...HOUSE_PLAYERS.map((p) => p.name), ...listIdentities(), me.name])].map(
+        async (n) => [await publicKeyHex(getOrCreateIdentity(n).secretKey), n],
+      ),
     ),
   );
   return {

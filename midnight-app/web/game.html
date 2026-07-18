@@ -65,6 +65,28 @@
   }
   .h-dot .h-name.up { top: -32px; }
   .h-dot .h-val.down { bottom: -36px; }
+
+  /* Seats at the table */
+  .seats { margin-top: 14px; }
+  .seats-label {
+    font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--ink-soft); font-weight: 600; margin-bottom: 8px;
+  }
+  .seats-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .seat {
+    display: inline-flex; align-items: center; gap: 7px;
+    border: 1px solid var(--paper-line); border-radius: 999px;
+    padding: 4px 12px 4px 7px; font-size: 12.5px; color: var(--ink);
+    background: #fdfbf5;
+  }
+  .seat .seat-wax {
+    width: 14px; height: 14px; border-radius: 50%; flex: none;
+    background: radial-gradient(circle at 35% 30%, #b0453b, var(--wax) 55%, var(--wax-deep));
+  }
+  .seat.revealed .seat-wax { background: radial-gradient(circle at 35% 30%, #f0bd75, var(--lamplight)); }
+  .seat .seat-commit { font-family: var(--mono); font-size: 10px; color: var(--ink-soft); }
+  .seat.you { border-color: var(--lamplight); }
+  .seats-empty { color: var(--ink-soft); font-size: 12.5px; }
   @keyframes dropIn { from { transform: translateX(-50%) translateY(-40px); opacity: 0; } }
   .h-target {
     position: absolute; bottom: 0; top: -6px; width: 0;
@@ -172,11 +194,16 @@
         <p class="record-contract">game <span class="mono" id="game-contract">—</span></p>
       </div>
 
+      <div class="seats" id="seats-wrap">
+        <p class="seats-label">At the table — <span id="sealed-count">0</span> sealed</p>
+        <div class="seats-row" id="seats"></div>
+      </div>
+
       <div class="histo-wrap">
         <div class="histo" id="histo"></div>
         <div class="h-axis"><span>1</span><span>25</span><span>50</span><span>75</span><span>100</span></div>
-        <p class="histo-empty" id="histo-empty">Sealed numbers so far: <span id="sealed-count">0</span> —
-        each is an opaque commitment. The histogram appears as players reveal.</p>
+        <p class="histo-empty" id="histo-empty">Each seat holds an opaque commitment —
+        the histogram appears as players reveal.</p>
       </div>
 
       <p class="champion-note" id="champion-note" hidden></p>

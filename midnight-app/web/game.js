@@ -170,6 +170,28 @@ function render() {
   ['reveal-guess-button', 'close-sealing-button', 'reckon-button', 'finalize-game-button']
     .forEach((id) => { $(id).disabled = jobActive; });
 
+  // Seats at the table — visible from the moment a commitment lands.
+  const revealedIds = new Set(v.guesses.map((g) => g.id));
+  const seatsSig = v.entries.map((e) => e.id).join(',') + '|' + [...revealedIds].join(',');
+  const seats = $('seats');
+  if (seats.dataset.state !== seatsSig) {
+    seats.dataset.state = seatsSig;
+    seats.innerHTML = '';
+    if (v.entries.length === 0) {
+      seats.innerHTML = '<span class="seats-empty">Empty — numbers appear here the moment they are sealed.</span>';
+    }
+    for (const e of v.entries) {
+      const seat = document.createElement('span');
+      const revealed = revealedIds.has(e.id);
+      const you = e.id === s.identity.onChainId;
+      seat.className = 'seat' + (revealed ? ' revealed' : '') + (you ? ' you' : '');
+      seat.title = revealed ? 'revealed' : 'sealed — commitment ' + e.commitment;
+      seat.innerHTML = '<span class="seat-wax"></span>' + displayName(v, e.id) + (you ? ' (you)' : '') +
+        ' <span class="seat-commit">' + (revealed ? 'revealed' : e.commitment.slice(0, 8) + '…') + '</span>';
+      seats.appendChild(seat);
+    }
+  }
+
   // Public record
   drawHistogram(v);
   $('histo-empty').hidden = v.guesses.length > 0;
