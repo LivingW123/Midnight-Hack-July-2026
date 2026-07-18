@@ -66,6 +66,11 @@ CLI uses; the browser is just a window onto it. Each action shows an honest
 "generating zero-knowledge proof (~30–60s)" progress strip, and when the gavel
 falls, losing envelopes stay sealed — the SOLD stamp only ever names one price.
 
+Two house rivals — **vesper** and **orpheus** — bid on every auction with a little
+randomness and reveal on their own, so a solo demo always has competition. They are
+real bidders (own secret keys, own sealed bids, same proof pipeline), and their
+amounts are hidden from you exactly as yours are hidden from them.
+
 ## Demo walkthrough (what the video shows)
 
 1. `npm run cli` — connect to the deployed auction ("Vintage Moog synthesizer").

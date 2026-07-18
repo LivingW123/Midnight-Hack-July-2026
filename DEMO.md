@@ -53,6 +53,14 @@ bid*; then `bob` → *Reveal my bid* (time-lapse each)
 > "Sealed: MEV-proof auctions for procurement, OTC trades, and NFT drops —
 > private inputs, verifiable outcomes, only possible on Midnight. Thanks!"
 
+## Rivals
+
+Two house bidders, **vesper** and **orpheus**, join every auction on their own a
+few seconds after it opens and reveal during the reveal phase — so even a solo
+recording has real competition. Wait for their toasts ("Rival paddle vesper
+sealed a bid…") and point at the registry filling up. You may win or lose the
+lot depending on their random amounts — either ending demos the privacy story.
+
 ## Timing tips
 
 - Proof generation is 30–60s per action: record everything, then cut the waits.

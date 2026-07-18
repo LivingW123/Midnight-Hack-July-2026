@@ -33,6 +33,7 @@ import {
   recordBid,
   getBid,
   getOrCreateIdentity,
+  runAsIdentity,
 } from './identities';
 
 // @ts-expect-error Required for wallet sync
@@ -140,8 +141,11 @@ async function boot() {
 
 async function apiStatus(): Promise<any> {
   const me = currentIdentity();
-  // Hide e2e test fixtures from the paddle rack (still usable by typing the name).
-  const identities = listIdentities().filter((n) => !n.startsWith('e2e-'));
+  // Hide e2e test fixtures and rival bidders from the paddle rack — rivals are
+  // opponents, not paddles you play (fixtures stay usable by typing the name).
+  const identities = listIdentities().filter(
+    (n) => !n.startsWith('e2e-') && !RIVALS.some((r) => r.name === n),
+  );
   if (!identities.includes(me.name)) identities.push(me.name);
   let view = null;
   let viewError = '';
@@ -251,6 +255,100 @@ async function apiAction(body: any): Promise<any> {
       return { error: `Unknown action: ${type}` };
   }
 }
+
+// ─── Rival bidders ─────────────────────────────────────────────────────────────
+//
+// Two house rivals who bid on every auction with a little randomness, so a
+// solo demo always has competition. They are real bidders: their own local
+// secret keys and sealed bids, transactions proven through the same pipeline.
+// They join a few seconds after bidding opens and reveal on their own during
+// the reveal phase. Their identities are hidden from the paddle rack.
+
+interface Rival {
+  name: string;
+  min: bigint;
+  max: bigint;
+  patienceMs: [number, number]; // random wait before acting
+}
+
+const RIVALS: Rival[] = [
+  { name: 'vesper', min: 500_000n, max: 1_600_000n, patienceMs: [6_000, 25_000] },
+  { name: 'orpheus', min: 800_000n, max: 2_400_000n, patienceMs: [12_000, 40_000] },
+];
+
+const rivalDue = new Map<string, number>();     // `${contract}:${name}:${phase}` -> timestamp
+const rivalRevealed = new Set<string>();        // `${contract}:${name}`
+
+function randomAmount(r: Rival): bigint {
+  const span = Number(r.max - r.min);
+  const raw = r.min + BigInt(Math.floor(Math.random() * span));
+  return (raw / 5_000n) * 5_000n; // round to a human-looking figure
+}
+
+function rivalReady(key: string, [lo, hi]: [number, number]): boolean {
+  const due = rivalDue.get(key);
+  if (due === undefined) {
+    rivalDue.set(key, Date.now() + lo + Math.random() * (hi - lo));
+    return false;
+  }
+  return Date.now() >= due;
+}
+
+async function rivalTick(): Promise<void> {
+  if (!walletReady || activeJob) return;
+  let view;
+  try {
+    view = await readAuctionLedger(providers, contractAddress);
+  } catch {
+    return;
+  }
+  const addr = contractAddress;
+
+  for (const rival of RIVALS) {
+    const key = `${addr}:${rival.name}`;
+    const myId = await publicKeyHex(getOrCreateIdentity(rival.name).secretKey);
+    const onChain = view.bids.some((b) => b.bidderId === myId);
+
+    if (view.phase === 'open' && !onChain) {
+      if (!rivalReady(`${key}:open`, rival.patienceMs)) continue;
+      // Reuse the recorded bid if a previous attempt failed mid-flight.
+      if (!getBid(rival.name, addr)) recordBid(rival.name, addr, randomAmount(rival));
+      runJob('rival-bid', `Rival paddle ${rival.name} is sealing a bid`, () =>
+        runAsIdentity(rival.name, async () => {
+          if (addr !== contractAddress) return `${rival.name} held back — the auction changed.`;
+          await auction.callTx.placeBid();
+          return `Rival paddle ${rival.name} sealed a bid. Its amount is hidden — even from you.`;
+        }),
+      );
+      return; // one rival action per tick
+    }
+
+    if (view.phase === 'reveal' && onChain && !rivalRevealed.has(key) && getBid(rival.name, addr)) {
+      if (!rivalReady(`${key}:reveal`, [4_000, 18_000])) continue;
+      runJob('rival-reveal', `Rival paddle ${rival.name} reveals in zero knowledge`, () =>
+        runAsIdentity(rival.name, async () => {
+          if (addr !== contractAddress) return `${rival.name} held back — the auction changed.`;
+          try {
+            await auction.callTx.revealBid();
+          } catch (err) {
+            rivalRevealed.add(key); // don't retry a failing reveal forever
+            throw err;
+          }
+          rivalRevealed.add(key);
+          const after = await readAuctionLedger(providers, addr);
+          return after.winner === myId
+            ? `Rival ${rival.name} revealed and takes the lead at ${BigInt(after.highestBid).toLocaleString()}.`
+            : `Rival ${rival.name} revealed and did not take the lead — that bid stays sealed.`;
+        }),
+      );
+      return;
+    }
+  }
+}
+
+setInterval(() => {
+  rivalTick().catch(() => {});
+}, 7_000);
 
 // ─── HTTP plumbing ─────────────────────────────────────────────────────────────
 

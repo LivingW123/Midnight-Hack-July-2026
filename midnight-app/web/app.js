@@ -78,7 +78,10 @@ function render() {
     state.lastJobId = job && !jobActive ? job.id : 0;
   } else if (job && !jobActive && job.id !== state.lastJobId) {
     state.lastJobId = job.id;
-    if (job.message) toast(job.message, job.ok === false);
+    if (job.message) {
+      const failed = job.ok === false;
+      toast(failed ? `${job.label} — ${job.message}` : job.message, failed);
+    }
   }
 
   // Job progress strip

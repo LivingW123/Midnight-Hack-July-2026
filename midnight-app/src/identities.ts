@@ -55,9 +55,26 @@ export function setCurrentIdentity(name: string): Identity {
   return identity;
 }
 
+// Temporary identity override: lets background actors (rival bidders in the
+// web app) prove transactions AS themselves without touching the persisted
+// "current" identity the user is driving. Safe because transactions are
+// serialized — there is never more than one prover running.
+let identityOverride: string | null = null;
+
 export function currentIdentity(): Identity {
+  if (identityOverride) return getOrCreateIdentity(identityOverride);
   const store = load();
   return getOrCreateIdentity(store.current || 'seller');
+}
+
+export async function runAsIdentity<T>(name: string, fn: () => Promise<T>): Promise<T> {
+  getOrCreateIdentity(name);
+  identityOverride = name;
+  try {
+    return await fn();
+  } finally {
+    identityOverride = null;
+  }
 }
 
 export function listIdentities(): string[] {

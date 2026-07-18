@@ -43,7 +43,7 @@ Witnesses (private inputs, supplied locally at proof time): `localSecretKey(): B
 | `src/auction-api.ts` | compiled-contract loading + witness binding, providers, `deployAuction`/`connectAuction` (DUST retries), `readAuctionLedger` typed view |
 | `src/identities.ts` | named local identities: secret keys + sealed bids, persisted to `.sealed-identities.json` |
 | `src/cli.ts` | interactive menu (status / switch identity / bid / close / reveal / finalize / private view / new auction) |
-| `src/web-server.ts` + `web/` | local web app: JSON API + static frontend, one-slot job queue serializing proofs |
+| `src/web-server.ts` + `web/` | local web app: JSON API + static frontend, one-slot job queue serializing proofs, rival auto-bidders (vesper, orpheus) |
 | `src/deploy.ts` | non-interactive deploy used by `npm run setup` |
 | `src/wallet.ts`, `src/network.ts` | scaffold plumbing: wallet-sdk wiring, network configs, state file |
 | `scripts/e2e-check.ts` | lifecycle + privacy e2e (see root README) |
