@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Number Game — Sealed</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='13' fill='%2393332B'/><text x='16' y='22' text-anchor='middle' font-size='16' fill='%23F6F3EA' font-family='Georgia'>%3F</text></svg>">
+<style>
+  .game-main { max-width: 720px; margin: 0 auto; padding: 0 24px 70px; }
+  .back { color: var(--dusk); text-decoration: none; font-size: 13px; }
+  .back:hover { color: var(--moon); }
+
+  .rules {
+    color: var(--dusk); font-size: 13.5px; max-width: 56ch;
+    margin: 0 auto 26px; text-align: center;
+  }
+  .rules b { color: var(--lamplight); font-weight: 600; }
+
+  .number-line { display: flex; gap: 10px; align-items: stretch; }
+  .number-line input {
+    width: 110px; background: var(--night); border: 1px solid var(--night-line);
+    border-radius: 8px; padding: 9px 12px; font-family: var(--mono); font-size: 22px;
+    text-align: center;
+  }
+  .number-line input:focus { border-color: var(--lamplight); }
+
+  .sealed-number {
+    display: flex; align-items: center; gap: 14px;
+    background: linear-gradient(175deg, #262138, #1d1a2c);
+    border: 1px solid var(--night-line); border-radius: 10px; padding: 16px 18px;
+  }
+  .sealed-number .wax-mini {
+    width: 34px; height: 34px; border-radius: 50%; flex: none;
+    background: radial-gradient(circle at 35% 30%, #b0453b, var(--wax) 55%, var(--wax-deep));
+    box-shadow: inset 0 0 0 4px #7c2a2455;
+  }
+  .sealed-number .num { font-family: var(--mono); font-size: 24px; color: var(--lamplight); }
+  .sealed-number .cap { font-size: 12px; color: var(--dusk); }
+
+  /* Histogram */
+  .histo-wrap { margin-top: 8px; }
+  .histo {
+    position: relative; height: 150px; margin: 26px 6px 0;
+    border-bottom: 2px solid var(--ink);
+  }
+  .h-dot {
+    position: absolute; bottom: 8px; width: 15px; height: 15px;
+    border-radius: 50%; transform: translateX(-50%);
+    background: radial-gradient(circle at 35% 30%, #4b4368, #322b4a);
+    border: 1.5px solid #262138;
+    animation: dropIn 0.5s cubic-bezier(.3,1.5,.5,1);
+  }
+  .h-dot.champ { background: radial-gradient(circle at 35% 30%, #f0bd75, var(--lamplight)); border-color: #b57f33; }
+  .h-dot .h-name {
+    position: absolute; top: -17px; left: 50%; transform: translateX(-50%);
+    font-family: var(--mono); font-size: 9.5px; color: var(--ink-soft); white-space: nowrap;
+  }
+  .h-dot .h-val {
+    position: absolute; bottom: -22px; left: 50%; transform: translateX(-50%);
+    font-family: var(--mono); font-size: 10.5px; color: var(--ink);
+  }
+  .h-dot .h-name.up { top: -32px; }
+  .h-dot .h-val.down { bottom: -36px; }
+  @keyframes dropIn { from { transform: translateX(-50%) translateY(-40px); opacity: 0; } }
+  .h-target {
+    position: absolute; bottom: 0; top: -6px; width: 0;
+    border-left: 2px dashed var(--wax); transform: translateX(-50%);
+    animation: targetDrop 0.6s ease-out;
+  }
+  @keyframes targetDrop { from { top: -40px; opacity: 0; } }
+  .h-target .t-label {
+    position: absolute; top: -22px; left: 50%; transform: translateX(-50%);
+    font-family: var(--serif); font-weight: 600; font-size: 13px; color: var(--wax);
+    white-space: nowrap; background: var(--paper); padding: 0 6px;
+  }
+  .h-axis { display: flex; justify-content: space-between; margin: 26px 6px 0; font-family: var(--mono); font-size: 10px; color: var(--ink-soft); }
+  .histo-empty { color: var(--ink-soft); font-size: 13px; padding: 26px 4px 8px; text-align: center; }
+
+  .champion-note {
+    margin-top: 18px; text-align: center; font-family: var(--serif);
+    font-size: 17px; color: var(--ink);
+  }
+  .champion-note .mono { font-size: 12px; }
+
+  .phase-rail-4 li { padding: 0 14px; }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-brand">
+    <span class="seal-mark" aria-hidden="true"></span>
+    <span class="wordmark">Sealed</span>
+    <span class="tagline">the number game</span>
+  </div>
+  <div class="masthead-net">
+    <a class="back" href="/">← the auction house</a>
+    <span class="net-dot" id="net-dot"></span>
+    <span id="net-label">connecting…</span>
+  </div>
+</header>
+
+<section class="lot-banner">
+  <p class="lot-eyebrow">A game impossible on a transparent chain</p>
+  <h1 class="lot-title" id="game-question">The Number Game</h1>
+  <p class="rules">Everyone seals a number from <b>1 to 100</b>. When sealing closes, all numbers
+  are revealed and the target is fixed at <b>two-thirds of the mean</b>. Closest wins.
+  If guesses were public, the last player would simply compute the average — sealing is what makes it fair.</p>
+  <ol class="phase-rail phase-rail-4" id="phase-rail" aria-label="Game phase">
+    <li data-phase="sealing"><span class="phase-tick"></span>Sealing</li>
+    <li data-phase="reveal"><span class="phase-tick"></span>Reveals</li>
+    <li data-phase="reckoning"><span class="phase-tick"></span>Reckoning</li>
+    <li data-phase="closed"><span class="phase-tick"></span>Gavel</li>
+  </ol>
+</section>
+
+<main class="game-main">
+
+  <div class="panel" id="no-game-panel">
+    <h2 class="panel-title">No game at the table</h2>
+    <p class="field-help" style="margin:0 0 12px">Open one — you become the host, and five house players
+    with very different theories of other people's minds will join within the minute.</p>
+    <button class="btn btn-primary" id="new-game-button">Open a Number Game</button>
+  </div>
+
+  <div class="panel" id="play-panel" hidden>
+    <h2 class="panel-title">Your number <span id="play-as" style="color:var(--dusk);font-family:var(--sans);font-size:12.5px;font-weight:400"></span></h2>
+
+    <form id="guess-form" autocomplete="off">
+      <div class="number-line">
+        <input id="guess-input" type="text" inputmode="numeric" placeholder="1–100" maxlength="3" aria-label="Your guess, 1 to 100">
+        <button type="submit" class="btn btn-primary" id="guess-button">Seal my number</button>
+      </div>
+      <p class="field-help">Think about how deep everyone else will think. Sealed with a one-time nonce —
+      nobody sees it until reveals, not even the host.</p>
+    </form>
+
+    <div class="sealed-number" id="sealed-number" hidden>
+      <div class="wax-mini" aria-hidden="true"></div>
+      <div>
+        <p class="num" id="sealed-value">—</p>
+        <p class="cap" id="sealed-cap">Sealed — visible only to you.</p>
+      </div>
+    </div>
+
+    <div class="actions" id="host-actions" style="margin-top:14px">
+      <button class="btn btn-wax" id="close-sealing-button" hidden>Close the sealing</button>
+      <button class="btn btn-wax" id="reckon-button" hidden>Fix the target &amp; crown the champion</button>
+      <button class="btn btn-ghost" id="finalize-game-button" hidden>Close the game</button>
+      <button class="btn btn-line" id="reveal-guess-button" hidden>Reveal my number</button>
+    </div>
+
+    <div class="job" id="job" hidden>
+      <div class="job-top">
+        <span id="job-label">Working…</span>
+        <span class="job-clock" id="job-clock">0s</span>
+      </div>
+      <div class="job-bar"><span class="job-bar-fill"></span></div>
+      <p class="job-stage" id="job-stage">Generating a zero-knowledge proof on this machine — usually 30–60 seconds…</p>
+    </div>
+  </div>
+
+  <section class="record" style="padding:26px 0">
+    <div class="side-label">The public record <em>— everything the chain knows</em></div>
+    <div class="record-sheet">
+      <div class="record-head">
+        <p class="record-kicker">The table</p>
+        <p class="record-contract">game <span class="mono" id="game-contract">—</span></p>
+      </div>
+
+      <div class="histo-wrap">
+        <div class="histo" id="histo"></div>
+        <div class="h-axis"><span>1</span><span>25</span><span>50</span><span>75</span><span>100</span></div>
+        <p class="histo-empty" id="histo-empty">Sealed numbers so far: <span id="sealed-count">0</span> —
+        each is an opaque commitment. The histogram appears as players reveal.</p>
+      </div>
+
+      <p class="champion-note" id="champion-note" hidden></p>
+
+      <dl class="record-facts">
+        <div><dt>Phase</dt><dd id="g-phase">—</dd></div>
+        <div><dt>Sealed / revealed</dt><dd id="g-counts">—</dd></div>
+        <div><dt>Target (⅔ × mean)</dt><dd id="g-target">—</dd></div>
+        <div><dt>Champion</dt><dd class="mono" id="g-champion">—</dd></div>
+      </dl>
+
+      <p class="record-footnote">The target is proven, not trusted: circuits cannot divide, so the contract
+      verifies the claimed quotient with multiplications alone — a wrong target cannot generate a proof.
+      Unrevealed numbers forfeit, exactly like unrevealed auction bids.</p>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="/game.js"></script>
+</body>
+</html>

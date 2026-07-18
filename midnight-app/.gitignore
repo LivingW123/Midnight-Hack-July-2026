@@ -60,3 +60,4 @@ temp/
 .midnight-wallet-state/
 .sealed-identities.json
 midnight-level-db/
+.sealed-game.json
