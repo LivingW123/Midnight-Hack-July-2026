@@ -44,10 +44,27 @@ Prereqs: Docker Desktop, Node 22+. (Windows: use WSL — see [SETUP.md](SETUP.md
 ```bash
 ./setup.sh                              # Compact compiler + deps + contract compile
 cd midnight-app && npm run setup        # boots local devnet (Docker), deploys an auction
-npm run cli                             # play every role interactively
+npm run web                             # → http://localhost:4600
 ```
 
 No wallet extension, no faucet, no tokens needed — the local devnet self-funds.
+Prefer a terminal? `npm run cli` drives the same auction interactively.
+
+## The web app
+
+`npm run web` opens the auction house at **http://localhost:4600** — a split-screen
+that *is* the privacy argument:
+
+- **Your desk** (left, dark): switch bidding paddles, seal a bid into an envelope —
+  amount and nonce rendered from your local file, never sent anywhere.
+- **The public record** (right, paper): the live on-chain registry — opaque
+  commitments, phase, and eventually the winner. Everything the chain knows fits
+  on one printed page, and your amounts are never on it.
+
+The server runs on your machine and wraps the same wallet + local proof server the
+CLI uses; the browser is just a window onto it. Each action shows an honest
+"generating zero-knowledge proof (~30–60s)" progress strip, and when the gavel
+falls, losing envelopes stay sealed — the SOLD stamp only ever names one price.
 
 ## Demo walkthrough (what the video shows)
 
