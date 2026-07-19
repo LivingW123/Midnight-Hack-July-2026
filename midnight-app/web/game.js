@@ -260,7 +260,11 @@ function render() {
     // Every field on these cards comes from the server: the forecast the agent
     // sealed, its live pipeline stage, and its record across settled markets.
     const mine = s.agents || [];
-    const msig = JSON.stringify(mine) + v.phase;
+    // Coarse signature only — the pipeline stage ticks every ~800ms, and
+    // rebuilding on that would re-fire the entrance animation every poll.
+    // Stage changes are applied in place further down instead.
+    const msig = mine.map((a) => [a.name, a.sealed, a.revealed, a.won, a.forecast !== null,
+                                  Boolean(a.stage), a.record.markets].join(':')).join('|') + v.phase;
     if (myWrap.dataset.state !== msig) {
       myWrap.dataset.state = msig;
       myWrap.innerHTML = '';
@@ -289,6 +293,7 @@ function render() {
       for (const a of mine) {
         const card = document.createElement('div');
         card.className = 'my-agent';
+        card.dataset.agent = a.name;
         card.innerHTML = agentCard(a);
         const bidBtn = card.querySelector('[data-bid]');
         if (bidBtn) bidBtn.addEventListener('click', () => {
@@ -297,6 +302,21 @@ function render() {
         });
         myWrap.appendChild(card);
       }
+    }
+
+    // Stage ticks land in place — no rebuild, so the entrance plays once.
+    for (const a of mine) {
+      if (!a.stage) continue;
+      const card = myWrap.querySelector('[data-agent="' + CSS.escape(a.name) + '"]');
+      if (!card) continue;
+      const fill = card.querySelector('.ma-prog-fill');
+      const label = card.querySelector('.ma-prog-label');
+      const count = card.querySelector('.ma-prog-count');
+      const detail = card.querySelector('.ma-prog-detail');
+      if (fill) fill.style.width = Math.round((a.stage.step / a.stage.total) * 100) + '%';
+      if (label) label.textContent = a.stage.label;
+      if (count) count.textContent = 'step ' + a.stage.step + ' of ' + a.stage.total;
+      if (detail) detail.textContent = a.stage.detail;
     }
   }
 

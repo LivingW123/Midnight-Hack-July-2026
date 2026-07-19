@@ -2,11 +2,7 @@
 
 **Auctions where nobody sees your bid. Not the seller, not rival bidders, not even the blockchain.**
 
-Midnight Hackathon, July 2026 · **DeFi track**
-
 ---
-
-## For judges — start here
 
 **Run it (3 commands, ~5 min including Docker pulls):**
 
@@ -19,22 +15,15 @@ npm run web                             # → http://localhost:4600
 No wallet extension, no faucet, no testnet tokens — the local devnet self-funds.
 Windows: run inside WSL ([SETUP.md](SETUP.md)).
 
-**Then look at these four things, in this order:**
+**Then look at these five things, in this order:**
 
-| # | Where | What you're looking at | Time |
-| --- | --- | --- | --- |
-| 1 | **http://localhost:4600** | **Deploy an agent into a prediction market.** Pick an event, deploy a named agent with a strategy prompt, and watch it run a research pipeline and seal a forecast. No live odds exist, so nobody can herd or copy-trade. | 4 min |
-| 2 | **/index.html** | The core claim, made visual. Split screen: your desk (dark, local) vs. the public record (paper, on-chain). Seal a bid — watch the amount appear on the left and *never* on the right. | 2 min |
-| 3 | **/house.html** | Five auction mechanisms in one contract. Run the **Dutch** one — the winner proves `reservation ≥ price` without ever revealing how much more they'd have paid. | 3 min |
-| 4 | **/desk.html** | A market with no human traders at all: a broker agent and three buyer desks research, value, and settle against each other. | 3 min |
-| 5 | `npm run test:e2e` | The privacy claim, machine-checked: losing bid amounts are asserted absent from indexer-visible state in three encodings. | 1 min |
-
-**The one thing to judge us on:** `claimAtCurrentPrice` in
-[`auction-house.compact`](midnight-app/contracts/auction-house.compact) contains no
-`disclose()` on the bid amount anywhere. The chain learns the single bit it needed —
-"someone will pay at least this" — and nothing more. Our e2e suite asserts the
-reservation price is absent from chain-visible state both before the claim *and after
-winning*.
+| # | Where | What you're looking at |
+| --- | --- | --- |
+| 1 | **http://localhost:4600** | **Deploy an agent into a prediction market.** Pick an event, deploy a named agent with a strategy prompt, and watch it run a research pipeline and seal a forecast. No live odds exist, so nobody can herd or copy-trade. |
+| 2 | **/index.html** | The core claim, made visual. Split screen: your desk (dark, local) vs. the public record (paper, on-chain). Seal a bid — watch the amount appear on the left and *never* on the right. |
+| 3 | **/house.html** | Five auction mechanisms in one contract. Run the **Dutch** one — the winner proves `reservation ≥ price` without ever revealing how much more they'd have paid. |
+| 4 | **/desk.html** | A market with no human traders at all: a broker agent and three buyer desks research, value, and settle against each other. |
+| 5 | `npm run test:e2e` | The privacy claim, machine-checked: losing bid amounts are asserted absent from indexer-visible state in three encodings. |
 
 ---
 
@@ -225,35 +214,10 @@ give your agent your true number, because nothing and nobody can pry it loose.
 Stack: Compact 0.31, Midnight.js 4.1, local proof server 8.1.
 Public testnet deploy: `npm run setup -- --network preview`.
 
-Full protocol writeup, verification method, and an explicit limits section:
+Full protocol writeup and verification method:
 **http://localhost:4600/security.html**.
 
 ---
-
-## Limits — what this does *not* claim
-
-Stated up front, because a demo that oversells its threat model is worse than one that
-admits its edges.
-
-- **A losing reveal leaks one bit** ("≤ current highest at reveal time") — inherent to
-  on-chain max-tracking. The winning price is public by design.
-- **Bidders who never reveal forfeit** (standard commit-reveal rule).
-- **Bidder ids are pseudonymous hashes**, so cross-auction correlation is possible if
-  you reuse an identity.
-- **The time-lock is not cryptographic timelock encryption.** No VDF, no threshold
-  committee — it's commit-reveal gated on a committed tick, so a seller who never opens
-  the schedule stalls the auction.
-- **The tick counter is not a clock.** It advances when someone calls `tick()`; it is
-  not block height or wall time.
-- **Combinatorial is fixed at three lots**, and **batch supply at three units** —
-  exhaustive winner determination and the clearing ladder are tractable in-circuit
-  precisely at that size. General combinatorial winner determination is NP-hard.
-- **Bid metadata is public by design** (who bid, in what order, when). That's what
-  makes shill detection possible without deanonymisation — and it's also a real
-  fingerprinting surface.
-- **No settlement layer.** This proves who won at what price; it doesn't move funds.
-- **The intelligence scores are heuristics** tuned on synthetic fixtures — prompts for
-  a human, never verdicts.
 
 ## Future work
 

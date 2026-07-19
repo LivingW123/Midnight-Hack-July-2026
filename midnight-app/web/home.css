@@ -120,3 +120,37 @@
   .features { grid-template-columns: 1fr; }
   .feature { padding: var(--space-5); }
 }
+
+/* ── Entrance ─────────────────────────────────────────────────
+   Same idiom as the card entrances elsewhere in the app (cardIn in
+   styles.css), with a little more overshoot because these are the first
+   things anyone sees. Staggered in reading order: hero, then each feature,
+   then the foundation strip. The global prefers-reduced-motion rule in
+   styles.css collapses all of it. */
+
+@keyframes featureIn {
+  from { opacity: 0; transform: translateY(18px) scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes riseIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.home-hero .lot-eyebrow { animation: riseIn 0.5s ease-out backwards; }
+.home-hero .lot-title   { animation: riseIn 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 0.06s backwards; }
+.home-lede              { animation: riseIn 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 0.14s backwards; }
+
+/* The pop: a touch of overshoot on the scale so the cards land rather than fade. */
+.feature {
+  animation: featureIn 0.62s cubic-bezier(0.2, 1.18, 0.32, 1) backwards;
+}
+.feature:nth-child(1) { animation-delay: 0.22s; }
+.feature:nth-child(2) { animation-delay: 0.34s; }
+
+.foundation { animation: riseIn 0.6s ease-out 0.48s backwards; }
+
+/* fill-mode is `backwards`, not `both`, throughout: a filling animation wins
+   over a transition, so `both` would leave .feature stuck at transform:none and
+   silently kill the hover lift. `backwards` covers the stagger delay and then
+   gets out of the way. */
