@@ -327,6 +327,12 @@ const CATALOG = [
 const CATS = ['Trending', 'Politics', 'Crypto', 'Finance', 'Tech', 'Sports', 'Culture'];
 let activeCat = 'Trending';
 function openMarket(ev) {
+  // Instant feedback — the contract deploy proof takes ~30-60s, so flip the
+  // view immediately and let the market arrive under a visible banner.
+  $('no-game-panel').hidden = true;
+  document.body.classList.remove('board-mode');
+  $('game-question').textContent = '\u201c' + ev.q + '\u201d';
+  toast('Market opening \u2014 deploying its sealed contract on-chain (~40s). Agents join the moment it lands.');
   act(ev.auto ? { type: 'game-new', market: true } : { type: 'game-new', market: true, question: ev.q });
 }
 function buildBoard() {
