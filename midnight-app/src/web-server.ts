@@ -62,6 +62,20 @@ import {
   type HouseView,
 } from './house-api';
 import { observeBid, observeSettlement, detectShills, adviseReserve, allBids } from './intel';
+import {
+  DESK_AGENTS,
+  initBrain,
+  brainInfo,
+  brokerPlan,
+  buyerValuation,
+  wantsToClaim,
+  think,
+  reasoningFeed,
+  clearFeed,
+  remember,
+  agentMemory,
+} from './agents';
+import { observeMarket, describeSignal } from './research';
 
 // @ts-expect-error Required for wallet sync
 globalThis.WebSocket = WebSocket;
@@ -198,6 +212,13 @@ async function boot() {
       console.log(`  (recorded Auction House unreachable: ${err?.message ?? err})`);
     }
   }
+
+  const brain = await initBrain();
+  console.log(
+    brain.kind === 'ollama'
+      ? `  Desk agents: local LLM brains via ollama (${brain.model}) — nothing leaves this machine`
+      : '  Desk agents: transparent heuristic brains (no local LLM found)',
+  );
 
   walletReady = true;
   console.log(`\n  Sealed is ready → http://localhost:${PORT}\n`);
@@ -710,6 +731,20 @@ async function apiAction(body: any): Promise<any> {
       return { ok: true };
     }
 
+    case 'desk-start': {
+      if (desk.active) return { error: 'The desk already has a live exit — let it settle first.' };
+      const item = String(body?.item ?? '').trim().slice(0, 120) || '1,000,000 shares — Meridian Industries';
+      clearFeed();
+      runJob('desk-start', 'The broker prices and opens the exit', async () => {
+        await startDesk(item);
+        return `The desk is live: “${item}”. Agents are researching.`;
+      });
+      return { ok: true };
+    }
+    case 'desk-stop': {
+      desk.active = false;
+      return { ok: true };
+    }
     default:
       return { error: `Unknown action: ${type}` };
   }
@@ -887,6 +922,218 @@ setInterval(() => {
   houseTick().catch(() => {});
 }, 8_000);
 
+// ─── Sealed Desk — the fully agent-run market ─────────────────────────────────
+//
+// One broker agent opens and paces a Dutch exit; buyer-desk agents research,
+// form private valuations, seal reservations, and decide when to claim. All
+// brains run locally (ollama when present, transparent heuristics otherwise);
+// every decision lands in a reasoning feed the local UI shows and the chain
+// never sees. One chain action per tick, through the same one-slot job queue
+// as every human action.
+
+interface DeskState {
+  active: boolean;
+  address: string;
+  item: string;
+  openedAt: number;
+  lastClockAt: number;
+  valuations: Map<string, bigint>; // buyer -> private valuation (server memory only)
+  sealedDone: Set<string>;
+  settled: boolean;
+}
+
+const desk: DeskState = {
+  active: false,
+  address: '',
+  item: '',
+  openedAt: 0,
+  lastClockAt: 0,
+  valuations: new Map(),
+  sealedDone: new Set(),
+  settled: false,
+};
+
+function deskBroker() {
+  return DESK_AGENTS.find((a) => a.role === 'broker')!;
+}
+
+async function startDesk(item: string): Promise<void> {
+  const signal = await observeMarket();
+  const broker = deskBroker();
+  think(broker.name, `pricing the exit: ${describeSignal(signal)}`);
+  const plan = await brokerPlan(1n, signal);
+  think(broker.name, `opening “${item}” at ${plan.startPrice.toLocaleString()}, floor ${plan.floorPrice.toLocaleString()} — ${plan.rationale}`);
+  const addr = await runAsIdentity(broker.name, () =>
+    deployHouse(houseProviders, {
+      item,
+      format: 'dutch',
+      startPrice: plan.startPrice,
+      floorPrice: plan.floorPrice,
+      priceStep: plan.priceStep,
+    }),
+  );
+  recordHouse(addr, 'dutch');
+  setActiveHouse(addr);
+  house = await connectHouse(houseProviders, addr);
+  houseAddress = addr;
+  houseOpenedAt = Date.now();
+  desk.active = true;
+  desk.address = addr;
+  desk.item = item;
+  desk.openedAt = Date.now();
+  desk.lastClockAt = Date.now();
+  desk.valuations = new Map();
+  desk.sealedDone = new Set();
+  desk.settled = false;
+  think(broker.name, `the block is on the tape — sealed reservations only`);
+}
+
+async function deskTick(): Promise<void> {
+  if (!desk.active || !walletReady || activeJob) return;
+  const addr = desk.address;
+  let view: HouseView;
+  try {
+    view = await readHouseLedger(houseProviders, addr);
+  } catch {
+    return;
+  }
+
+  // Settled: narrate, teach the agents, log the settlement for future comps.
+  if (view.phase === 'closed') {
+    if (!desk.settled) {
+      desk.settled = true;
+      desk.active = false;
+      const broker = deskBroker();
+      const winnerName =
+        (await Promise.all(
+          DESK_AGENTS.map(async (a) => ((await housePublicKeyHex(getOrCreateIdentity(a.name).secretKey)) === view.winner ? a.name : null)),
+        )).find(Boolean) ?? (view.winner ? view.winner.slice(0, 8) + '…' : 'nobody');
+      think(broker.name, `gavel: sold at ${BigInt(view.highestBid).toLocaleString()} to ${winnerName} — every losing quote stays sealed`);
+      observeSettlement({
+        house: addr,
+        format: 'dutch',
+        item: desk.item,
+        clearingPrice: view.highestBid.toString(),
+        bidders: view.bidderCount,
+      });
+      for (const a of DESK_AGENTS.filter((x) => x.role === 'buyer')) {
+        const v = desk.valuations.get(a.name);
+        if (!v) continue;
+        const won = winnerName === a.name;
+        remember(
+          a.name,
+          { lastOutcome: won ? `won at ${view.highestBid}` : 'lost — reservation stayed sealed', episodes: agentMemory(a.name).episodes + 1 },
+          won
+            ? `claiming at ${view.highestBid} worked; patience paid ${(v - BigInt(view.highestBid)).toLocaleString()} under my valuation`
+            : `rode the clock too long at “${desk.item}” — claim earlier when the tape is contested`,
+        );
+      }
+    }
+    return;
+  }
+  if (view.phase !== 'open') return;
+
+  const price = BigInt(view.currentPrice);
+  const floor = BigInt(view.floorPrice);
+  const buyers = DESK_AGENTS.filter((a) => a.role === 'buyer');
+
+  // 1. A buyer who hasn't sealed yet seals (valuation formed on the spot).
+  for (const buyer of buyers) {
+    if (desk.sealedDone.has(buyer.name)) continue;
+    const signal = await observeMarket();
+    const { valuation, rationale } = await buyerValuation(buyer, price, signal);
+    desk.valuations.set(buyer.name, valuation);
+    desk.sealedDone.add(buyer.name);
+    think(buyer.name, rationale);
+    think(buyer.name, `sealing reservation ${valuation.toLocaleString()} — visible only on this machine`, true);
+    if (!getBid(buyer.name, addr)) recordBid(buyer.name, addr, valuation);
+    runJob('desk-seal', `${buyer.name} seals a reservation`, () =>
+      runAsIdentity(buyer.name, async () => {
+        if (addr !== desk.address) return `${buyer.name} stood down — the desk moved on.`;
+        await house.callTx.placeBid();
+        return `${buyer.name} sealed a quote. The chain holds only the envelope.`;
+      }),
+    );
+    return;
+  }
+
+  // 2. A sealed buyer whose moment has come claims the block.
+  for (const buyer of buyers) {
+    const v = desk.valuations.get(buyer.name);
+    if (!v || !desk.sealedDone.has(buyer.name)) continue;
+    if (wantsToClaim(buyer, v, price, floor)) {
+      think(buyer.name, `clock at ${price.toLocaleString()} — inside my number with room; claiming before a rival does`, true);
+      runJob('desk-claim', `${buyer.name} claims at the clock price`, () =>
+        runAsIdentity(buyer.name, async () => {
+          if (addr !== desk.address) return `${buyer.name} stood down — the desk moved on.`;
+          await house.callTx.claimAtCurrentPrice();
+          return `${buyer.name} takes the block at the public clock price. Their true maximum stays sealed.`;
+        }),
+      );
+      return;
+    }
+  }
+
+  // 3. Otherwise the broker walks the clock down (breathing room between steps).
+  if (Date.now() - desk.lastClockAt > 25_000 && price > floor) {
+    const broker = deskBroker();
+    desk.lastClockAt = Date.now();
+    think(broker.name, `no claim at ${price.toLocaleString()} — walking the clock down a step`);
+    runJob('desk-clock', 'the broker lowers the clock', () =>
+      runAsIdentity(broker.name, async () => {
+        if (addr !== desk.address) return 'clock skipped — the desk moved on.';
+        await house.callTx.tick();
+        return null as any;
+      }),
+    );
+  }
+}
+
+setInterval(() => {
+  deskTick().catch(() => {});
+}, 9_000);
+
+async function apiDeskStatus(): Promise<any> {
+  let view: HouseView | null = null;
+  if (walletReady && desk.address) {
+    try {
+      view = await readHouseLedger(houseProviders, desk.address);
+    } catch {
+      /* view stays null */
+    }
+  }
+  const ids = Object.fromEntries(
+    await Promise.all(DESK_AGENTS.map(async (a) => [a.name, await housePublicKeyHex(getOrCreateIdentity(a.name).secretKey)])),
+  );
+  const job = activeJob ?? lastJob;
+  return {
+    ready: walletReady,
+    bootError,
+    network,
+    brain: brainInfo(),
+    desk: {
+      active: desk.active,
+      address: desk.address,
+      item: desk.item,
+      settled: desk.settled,
+    },
+    agents: DESK_AGENTS.map((a) => ({
+      name: a.name,
+      role: a.role,
+      persona: a.persona,
+      onChainId: ids[a.name],
+      sealed: desk.sealedDone.has(a.name),
+      memory: agentMemory(a.name),
+    })),
+    feed: reasoningFeed(),
+    view: view && {
+      ...view,
+      winnerName: DESK_AGENTS.find((a) => ids[a.name] === view!.winner)?.name ?? null,
+    },
+    job: job && { id: job.id, kind: job.kind, label: job.label, stage: job.stage, startedAt: job.startedAt, ok: job.ok ?? null, message: job.message ?? null },
+  };
+}
+
 // ─── HTTP plumbing ─────────────────────────────────────────────────────────────
 
 const MIME: Record<string, string> = {
@@ -910,6 +1157,9 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === '/api/game-status' && req.method === 'GET') {
       return send(res, 200, JSON.stringify(await apiGameStatus()));
+    }
+    if (url.pathname === '/api/desk-status' && req.method === 'GET') {
+      return send(res, 200, JSON.stringify(await apiDeskStatus(), (_k, v) => (typeof v === 'bigint' ? v.toString() : v)));
     }
     if (url.pathname === '/api/house-status' && req.method === 'GET') {
       return send(res, 200, JSON.stringify(await apiHouseStatus()));

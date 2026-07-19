@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sealed Desk — the agent-run market</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='13' fill='%2393332B'/><path d='M9 20l5-6 4 3 5-8' stroke='%23F6F3EA' stroke-width='2.5' fill='none'/></svg>">
+<style>
+  .desk-main {
+    display: grid;
+    grid-template-columns: minmax(360px, 520px) minmax(360px, 500px);
+    justify-content: center;
+    gap: 0;
+    padding: 0 24px 60px;
+  }
+  .floor { padding: 26px 30px 26px 6px; border-right: 1px dashed #4a4363; }
+  .floor .side-label { color: var(--lamplight); }
+  .tape-side { padding: 26px 6px 26px 30px; }
+
+  .brain-badge {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-family: var(--mono); font-size: 11.5px; color: var(--dusk);
+    border: 1px solid var(--night-line); border-radius: 999px; padding: 4px 12px;
+    margin-top: 10px;
+  }
+  .brain-badge .b-dot { width: 7px; height: 7px; border-radius: 50%; background: #79b791; }
+
+  .agent-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .agent-card {
+    background: var(--night-raised); border: 1px solid var(--night-line);
+    border-radius: 10px; padding: 12px 14px;
+  }
+  .agent-card .a-name { font-family: var(--serif); font-weight: 600; font-size: 15px; }
+  .agent-card .a-role {
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--dusk); margin-left: 6px;
+  }
+  .agent-card .a-role.broker { color: var(--wax); }
+  .agent-card .a-persona { font-size: 12px; color: var(--dusk); margin-top: 4px; min-height: 30px; }
+  .agent-card .a-state { font-family: var(--mono); font-size: 11px; margin-top: 7px; color: var(--moon); }
+  .agent-card.sealed { border-color: #5a4a2a; }
+  .agent-card.won { border-color: var(--lamplight); box-shadow: 0 0 14px var(--lamplight-soft); }
+
+  .chatter {
+    background: var(--night-raised); border: 1px solid var(--night-line);
+    border-radius: 10px; padding: 14px 16px; max-height: 430px; overflow-y: auto;
+  }
+  .chatter-title { font-family: var(--serif); font-size: 15px; margin-bottom: 10px; }
+  .thought { display: flex; gap: 9px; padding: 6px 0; font-size: 13px; border-bottom: 1px solid #241f36; }
+  .thought:last-child { border-bottom: none; }
+  .thought .t-who { font-family: var(--serif); font-weight: 600; flex: none; width: 62px; }
+  .thought .t-text { color: #c9c4d8; }
+  .thought.private .t-text { color: var(--lamplight); }
+  .thought.private .t-lock {
+    font-family: var(--mono); font-size: 9.5px; color: var(--night);
+    background: var(--lamplight); border-radius: 3px; padding: 1px 5px;
+    flex: none; align-self: center;
+  }
+
+  .clock-face { text-align: center; padding: 8px 0 16px; }
+  .clock-label { font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-soft); }
+  .clock-price {
+    font-family: var(--mono); font-size: 44px; color: var(--ink);
+    font-variant-numeric: tabular-nums; line-height: 1.1;
+  }
+  .clock-floor { font-size: 12px; color: var(--ink-soft); }
+
+  .start-panel { margin-bottom: 14px; }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-brand">
+    <span class="seal-mark" aria-hidden="true"></span>
+    <span class="wordmark">Sealed Desk</span>
+    <span class="tagline">every trader is an AI — none can spy on each other</span>
+  </div>
+  <div class="masthead-net">
+    <a class="nav-link" href="/">the auction house →</a>
+    <span class="net-dot" id="net-dot"></span>
+    <span id="net-label">connecting…</span>
+  </div>
+</header>
+
+<section class="lot-banner">
+  <p class="lot-eyebrow">A block sale, run end to end by local agents</p>
+  <h1 class="lot-title" id="desk-item">The trading floor is quiet</h1>
+  <div class="brain-badge" id="brain-badge" hidden>
+    <span class="b-dot"></span><span id="brain-label">local brains</span>
+  </div>
+</section>
+
+<main class="desk-main">
+
+  <section class="floor">
+    <div class="side-label">The floor <em>— agents’ own reasoning, local only</em></div>
+
+    <div class="panel start-panel" id="start-panel">
+      <h2 class="panel-title">Put a block on the tape</h2>
+      <form id="desk-form" autocomplete="off">
+        <div class="bid-line">
+          <input id="desk-input" type="text" maxlength="120" placeholder="1,000,000 shares — Meridian Industries">
+          <button type="submit" class="btn btn-primary" id="desk-button">Open the exit</button>
+        </div>
+        <p class="field-help">The broker agent prices it from live market research; buyer desks take it from there.
+        You just watch.</p>
+      </form>
+    </div>
+
+    <div class="agent-grid" id="agent-grid"></div>
+
+    <div class="chatter">
+      <p class="chatter-title">Floor chatter</p>
+      <div id="chatter-feed"><p class="actions-empty">Agents narrate every decision here — including the
+      numbers that never leave this machine.</p></div>
+    </div>
+
+    <div class="job" id="job" hidden>
+      <div class="job-top">
+        <span id="job-label">Working…</span>
+        <span class="job-clock" id="job-clock">0s</span>
+      </div>
+      <div class="job-bar"><span class="job-bar-fill"></span></div>
+      <p class="job-stage">Generating a zero-knowledge proof on this machine — usually 30–60 seconds…</p>
+    </div>
+  </section>
+
+  <section class="tape-side">
+    <div class="side-label">The public tape <em>— everything the chain knows</em></div>
+    <div class="record-sheet">
+      <div class="record-head">
+        <p class="record-kicker">The tape</p>
+        <p class="record-contract">venue <span class="mono" id="desk-contract">—</span></p>
+      </div>
+
+      <div class="clock-face">
+        <p class="clock-label">Asking price — descending</p>
+        <p class="clock-price" id="clock-price">—</p>
+        <p class="clock-floor" id="clock-floor"></p>
+      </div>
+
+      <table class="registry" aria-label="Sealed quotes on-chain">
+        <thead><tr><th>№</th><th>Desk</th><th>Sealed quote</th></tr></thead>
+        <tbody id="quotes-body"></tbody>
+      </table>
+      <p class="registry-empty" id="quotes-empty">No sealed quotes yet.</p>
+
+      <div class="sold-stamp" id="desk-sold" hidden>
+        <span>Sold</span>
+        <span class="sold-price" id="desk-sold-price"></span>
+      </div>
+
+      <p class="record-footnote">Each quote is a locked envelope. The winner proves “my number ≥ the clock”
+      in zero knowledge and pays the public clock price — their true maximum, and every losing quote,
+      stays sealed forever. The venue can’t peek: there is nothing to peek at.</p>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="/desk.js"></script>
+</body>
+</html>
