@@ -185,15 +185,26 @@ function render() {
       myWrap.dataset.state = msig;
       myWrap.innerHTML = '';
       if (mine.length === 0) {
-        myWrap.innerHTML = '<div class="my-agent"><div class="ma-top">' +
-          '<input id="quick-agent" placeholder="name your agent (e.g. my-quant)" style="flex:1;min-width:160px;border:1px solid var(--paper-line);border-radius:8px;padding:8px 11px;font:inherit;font-size:13px">' +
-          '<button class="btn btn-primary" style="padding:7px 16px;font-size:13px" id="quick-deploy">Deploy agent &amp; start bidding</button></div></div>';
-        $('quick-deploy').addEventListener('click', () => {
-          const n = $('quick-agent').value.trim();
-          if (!n) return;
-          try { const m = JSON.parse(localStorage.getItem('myAgents') || '[]'); if (!m.includes(n)) m.push(n); localStorage.setItem('myAgents', JSON.stringify(m)); } catch {}
-          act({ type: 'game-add-agent', name: n }).then(() => act({ type: 'agent-bid-now' }));
-        });
+        const PRESETS = [
+          { n: 'atlas-quant', p: 'momentum strategy: weight market drift and on-chain flow above headlines' },
+          { n: 'nova-value', p: 'contrarian value: fade crowd momentum, demand two confirming domains' },
+          { n: 'oracle-hunter', p: 'news-first: headline sentiment leads, market data confirms' },
+          { n: 'delta-hedge', p: 'calibrated hedger: shade every conviction toward base rates' },
+        ];
+        const box = document.createElement('div');
+        box.className = 'my-agent';
+        box.innerHTML = '<div class="ma-top" style="margin-bottom:8px"><span class="ma-name">Choose your agent</span>' +
+          '<span class="ma-state">it researches, then bids \u2014 you just watch</span></div>' +
+          '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px">' +
+          PRESETS.map((a, i) => '<button class="btn btn-ghost" data-pick="' + i + '" style="text-align:left;padding:10px 12px;font-size:13px">' +
+            '<b style="font-family:var(--serif)">' + a.n + '</b><br><span style="color:var(--ink-soft);font-size:11.5px">' + a.p + '</span></button>').join('') + '</div>';
+        box.querySelectorAll('[data-pick]').forEach((b) => b.addEventListener('click', () => {
+          const a = PRESETS[Number(b.dataset.pick)];
+          try { localStorage.setItem('myAgents', JSON.stringify([a.n])); } catch {}
+          act({ type: 'game-add-agent', name: a.n, prompt: a.p }).then(() => act({ type: 'agent-bid-now' }));
+          toast(a.n + ' deployed \u2014 research pipeline starting. Watch the floor log.');
+        }));
+        myWrap.appendChild(box);
       }
       for (const n of mine) {
         const sealed = sealedIds.has(nameOf[n]);
@@ -203,12 +214,16 @@ function render() {
         const amt = ((hash % 90) + 10) * 100;
         const card = document.createElement('div');
         card.className = 'my-agent';
+        // The side and stake appear only AFTER the research log has run and
+        // the position is sealed — research first, price second.
         card.innerHTML = '<div class="ma-top"><span class="ma-name">' + n + '</span>' +
-          '<span class="ma-side ' + side + '">' + side.toUpperCase() + '</span>' +
-          '<span class="ma-amt">$' + amt.toLocaleString() + ' stake</span>' +
-          (sealed ? '<span class="ma-state">position sealed on-chain \uD83D\uDD12</span>'
-                  : '<button class="btn btn-primary" style="padding:6px 14px;font-size:13px" data-bid>Submit bid</button>' +
-                    '<button class="btn btn-ghost" style="padding:6px 14px;font-size:13px" data-auto>Auto mode</button>') +
+          (sealed
+            ? '<span class="ma-side ' + side + '">' + side.toUpperCase() + '</span>' +
+              '<span class="ma-amt">$' + amt.toLocaleString() + ' stake</span>' +
+              '<span class="ma-state">position sealed on-chain \uD83D\uDD12</span>'
+            : '<span class="ma-state" style="margin-left:0">\uD83D\uDD0E researching \u2014 live log below</span>' +
+              '<button class="btn btn-primary" style="padding:6px 14px;font-size:13px;margin-left:auto" data-bid>Bid now</button>' +
+              '<button class="btn btn-ghost" style="padding:6px 14px;font-size:13px" data-auto>Auto</button>') +
           '</div>';
         const bidBtn = card.querySelector('[data-bid]');
         if (bidBtn) bidBtn.addEventListener('click', () => { act({ type: 'agent-bid-now' }); toast(n + ' is placing its sealed bid…'); });
