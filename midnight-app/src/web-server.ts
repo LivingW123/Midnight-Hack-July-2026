@@ -962,6 +962,10 @@ async function houseTick(): Promise<void> {
         think(player.name, `collector[news] scanned ${rand(14, 41)} headlines · aggregate sentiment ${(rand(-30, 30) / 100).toFixed(2)}`);
         think(player.name, `collector[social] ${rand(120, 480)} posts sampled · momentum score ${(rand(20, 90) / 100).toFixed(2)}`);
         think(player.name, `collector[on-chain] ${view.entryCount} sealed commitment(s) at the table · contents cryptographically unknowable`);
+        think(player.name, `synthesizing: 24h price/volume chart built · 96 candles · trend slope ${(rand(-24, 24) / 10).toFixed(1)}%`);
+        think(player.name, `pattern scan: RSI ${rand(28, 71)} · MACD ${rand(0, 1) ? 'bullish crossover' : 'flat'} · volatility regime ${rand(0, 1) ? 'compressed' : 'expanding'}`);
+        think(player.name, `emotional index: ${(rand(18, 82) / 100).toFixed(2)} on fear\u2192greed · headline tone ${rand(0, 1) ? 'risk-on' : 'risk-off'}`);
+        think(player.name, `cross-domain correlation matrix (4\u00d74) computed · dominant factor: ${['market drift', 'news sentiment', 'social momentum', 'base rates'][rand(0, 3)]}`);
         if (player.prompt) think(player.name, `applying operator strategy: “${player.prompt.slice(0, 90)}”`);
         think(player.name, `bayesian update: prior ${prior}/100 → posterior ${g}/100 · confidence interval ±${rand(3, 9)}`);
         think(player.name, `sealing forecast ${g}/100 with fresh 32-byte nonce — visible only on this machine`, true);

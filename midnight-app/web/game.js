@@ -124,7 +124,8 @@ function render() {
   }
 
   $('no-game-panel').hidden = Boolean(s.gameAddress);
-  document.body.classList.toggle('board-mode', !s.gameAddress);
+  document.body.classList.add('board-mode');
+  document.body.classList.toggle('no-market', !s.gameAddress);
   $('play-panel').hidden = !s.gameAddress;
 
   if (!v) {
@@ -218,7 +219,8 @@ function render() {
         // the position is sealed — research first, price second.
         card.innerHTML = '<div class="ma-top"><span class="ma-name">' + n + '</span>' +
           (sealed
-            ? '<span class="ma-side ' + side + '">' + side.toUpperCase() + '</span>' +
+            ? (($('phase-banner').textContent = n + ' placed $' + amt.toLocaleString() + ' on ' + side.toUpperCase() + ' \u2014 sealed on-chain \uD83D\uDD12'), '') +
+              '<span class="ma-side ' + side + '">' + side.toUpperCase() + '</span>' +
               '<span class="ma-amt">$' + amt.toLocaleString() + ' stake</span>' +
               '<span class="ma-state">position sealed on-chain \uD83D\uDD12</span>'
             : '<span class="ma-state" style="margin-left:0">\uD83D\uDD0E researching \u2014 live log below</span>' +
@@ -356,7 +358,7 @@ function openMarket(ev) {
   // Instant feedback — the contract deploy proof takes ~30-60s, so flip the
   // view immediately and let the market arrive under a visible banner.
   $('no-game-panel').hidden = true;
-  document.body.classList.remove('board-mode');
+  document.body.classList.remove('no-market');
   $('game-question').textContent = '\u201c' + ev.q + '\u201d';
   toast('Market opening \u2014 deploying its sealed contract on-chain (~40s). Agents join the moment it lands.');
   act(ev.auto ? { type: 'game-new', market: true } : { type: 'game-new', market: true, question: ev.q });

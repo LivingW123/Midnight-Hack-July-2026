@@ -109,8 +109,24 @@
   .champion-note .mono { font-size: 12px; }
 
   .phase-rail-4 li { padding: 0 14px; }
-  body.board-mode .side-label, body.board-mode .record-sheet, body.board-mode .chart-wrap,
-  body.board-mode .phase-rail, body.board-mode #floor-panel { display: none !important; }
+  body.no-market .side-label, body.no-market .record-sheet, body.no-market .chart-wrap,
+  body.no-market #floor-panel, body.no-market #my-agents { display: none !important; }
+  /* dark market view */
+  #seats-wrap, .histo-wrap, .record-facts, .record-footnote, .record-head { display: none !important; }
+  .record-sheet { background: #1e2128; border: 1px solid #2c3039; box-shadow: none; }
+  .registry td, .registry th { color: #c9cdd8; border-color: #2c3039; }
+  .floor-panel { background: #1e2128; border-color: #2c3039; }
+  .seats-label { color: #8b91a0 !important; }
+  .fl-row { border-color: #262a33; }
+  .fl-who { color: #e8eaf0; } .fl-text { color: #9aa0ae; } .fl-time { color: #6f7584; }
+  .fl-row.private .fl-text { color: #e3a44f; }
+  .my-agent { background: #1e2128; border-color: #e3a44f55; }
+  .ma-name { color: #e8eaf0 !important; } .ma-amt { color: #e8eaf0; } .ma-state { color: #8b91a0; }
+  .my-agent .btn-ghost { background: #262a33; color: #e8eaf0; border-color: #2c3039; }
+  .chart-label { color: #8b91a0; }
+  .phase-banner { border-color: #2c3039; color: #e8eaf0; background: #1e2128; border-radius: 8px; padding: 10px; font-size: 15px; }
+  .champion-note { color: #e8eaf0; }
+  .sold-stamp { mix-blend-mode: normal; }
   .rules, #phase-rail { display: none !important; }
   #guess-form, #sealed-number, #play-panel .panel-title, #reveal-guess-button, #close-sealing-button, #reckon-button, #finalize-game-button, #resolve-yes-button, #resolve-no-button { display: none !important; }
   .my-agent { border: 1px solid var(--wax); border-radius: 10px; padding: 13px 16px; margin-bottom: 12px; background: #fdfbf5; }
