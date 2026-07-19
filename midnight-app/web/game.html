@@ -146,6 +146,49 @@
   .step-label { color: var(--wax) !important; }
   .champion-note { color: var(--ink); }
 
+  /* ── Polymarket-style dark board (landing, no active market) ── */
+  body.board-mode { background: #16181d; color: #e8eaf0; }
+  body.board-mode .masthead .wordmark, body.board-mode .lot-title { color: #f2f3f7; }
+  body.board-mode .lot-eyebrow { color: #e3a44f; }
+  body.board-mode .rules, body.board-mode .tagline, body.board-mode .masthead-net { color: #9aa0ae; }
+  body.board-mode .rules b { color: #e3a44f; }
+  body.board-mode .phase-rail { display: none; }
+  body.board-mode .game-main { max-width: 1160px; }
+  body.board-mode .panel { background: transparent; border: none; padding: 0; }
+  body.board-mode .panel-title, body.board-mode .field-help { color: #9aa0ae; }
+  body.board-mode #agent-input { background: #1e2128 !important; border-color: #2c3039 !important; color: #e8eaf0; }
+  body.board-mode #events-board { grid-template-columns: repeat(auto-fill, minmax(255px, 1fr)); gap: 12px; }
+  .board-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 14px; }
+  .board-tab {
+    background: transparent; border: none; color: #9aa0ae; font: inherit; font-size: 14px; font-weight: 600;
+    padding: 7px 13px; border-radius: 8px; cursor: pointer;
+  }
+  .board-tab:hover { color: #e8eaf0; }
+  .board-tab.on { background: #262a33; color: #e3a44f; }
+  .pm-card {
+    background: #1e2128; border: 1px solid #2c3039; border-radius: 12px; padding: 14px;
+    cursor: pointer; transition: border-color .15s, transform .1s; display: flex; flex-direction: column; gap: 10px;
+  }
+  .pm-card:hover { border-color: #4a5060; transform: translateY(-1px); }
+  .pm-top { display: flex; gap: 10px; align-items: flex-start; }
+  .pm-icon {
+    flex: none; width: 38px; height: 38px; border-radius: 8px; display: grid; place-items: center;
+    background: linear-gradient(150deg, #2c3039, #23262e); color: #e3a44f; font-size: 17px; font-weight: 700;
+  }
+  .pm-q { font-weight: 600; font-size: 14.5px; line-height: 1.35; color: #e8eaf0; }
+  .pm-odds { font-size: 11.5px; color: #8b91a0; display: flex; gap: 7px; align-items: center; }
+  .pm-lock { font-size: 12px; }
+  .pm-actions { display: flex; gap: 8px; }
+  .pm-actions button {
+    flex: 1; border: none; border-radius: 8px; padding: 8px 0; font: inherit; font-weight: 700; font-size: 13.5px; cursor: pointer;
+  }
+  .pm-yes { background: #1e3a2c; color: #5fd694; }
+  .pm-yes:hover { background: #25543c; }
+  .pm-no { background: #3a2226; color: #f06a6a; }
+  .pm-no:hover { background: #542b31; }
+  .pm-foot { display: flex; justify-content: space-between; font-size: 11px; color: #6f7584; font-family: var(--mono); }
+
+
 </style>
 </head>
 <body>
@@ -157,6 +200,7 @@
     <span class="tagline">AI prediction markets — no odds to herd on</span>
   </div>
   <div class="masthead-net">
+    <a class="nav-link" href="#" id="back-to-markets" hidden>← all markets</a>
     <a class="nav-link" href="/security.html">how it's secured →</a>
     <span class="net-dot" id="net-dot"></span>
     <span id="net-label">connecting…</span>
@@ -181,6 +225,7 @@
     <h2 class="panel-title">Open a market</h2>
     <p class="field-help" style="margin:0 0 14px">Pick an event. AI forecaster agents seal independent
     predictions — there are no live odds to herd on — and an oracle agent resolves it from public data.</p>
+    <div id="board-tabs" class="board-tabs"></div>
     <form id="agent-form" autocomplete="off" style="display:flex;gap:8px;margin-bottom:16px">
       <input id="agent-input" type="text" maxlength="20" placeholder="name your own AI agent (e.g. my-quant)"
         style="flex:1;background:var(--night);border:1px solid var(--night-line);border-radius:8px;padding:9px 12px;font-size:13.5px">

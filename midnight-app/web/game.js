@@ -124,6 +124,7 @@ function render() {
   }
 
   $('no-game-panel').hidden = Boolean(s.gameAddress);
+  document.body.classList.toggle('board-mode', !s.gameAddress);
   $('play-panel').hidden = !s.gameAddress;
 
   if (!v) {
@@ -132,6 +133,7 @@ function render() {
   }
 
   $('game-question').textContent = '“' + v.question + '”';
+  $('back-to-markets').hidden = false;
   $('game-contract').textContent = short(s.gameAddress, 10);
   $('play-as').textContent = '— playing as ' + s.identity.name;
 
@@ -245,63 +247,61 @@ $('guess-form').addEventListener('submit', (e) => {
   act({ type: 'game-seal', guess }).then((res) => { if (!res.error) input.value = ''; });
 });
 const CATALOG = [
-  { section: 'Trending', events: [
-    { q: 'Will BTC trade above its live price at resolution?', sub: 'Threshold fixed from live research · auto-resolved by the oracle agent', auto: true },
-    { q: 'Will the Fed cut rates at the September FOMC?', sub: 'Economy · resolves on the FOMC statement' },
-    { q: 'Will OpenAI release GPT-6 before 2027?', sub: 'Tech & AI · resolves on official announcement' },
-    { q: 'Government shutdown before October?', sub: 'Politics · resolves on appropriations lapse' },
-  ]},
-  { section: 'Politics', events: [
-    { q: 'Will Democrats win the 2028 presidential election?', sub: 'Resolves on certified result' },
-    { q: 'Will JD Vance win the 2028 Republican nomination?', sub: 'Resolves at the RNC' },
-    { q: 'Will Newsom win the 2028 Democratic nomination?', sub: 'Resolves at the DNC' },
-    { q: 'New UK prime minister before 2027?', sub: 'Resolves on a change of PM' },
-    { q: 'Will the US strike a new China trade deal this year?', sub: 'Resolves on signed agreement' },
-  ]},
-  { section: 'Crypto', events: [
-    { q: 'Will Bitcoin hit $100k in 2026?', sub: 'Resolves on any venue print' },
-    { q: 'Will Solana flip $300 this year?', sub: 'Resolves on daily close' },
-    { q: 'Will a US spot-Solana ETF be approved this year?', sub: 'Resolves on SEC approval' },
-    { q: 'Will Midnight NIGHT list on a top-5 exchange in 2026?', sub: 'Resolves on listing announcement' },
-    { q: 'New all-time high for total crypto market cap this year?', sub: 'Resolves on aggregate cap' },
-  ]},
-  { section: 'Economy', events: [
-    { q: 'US recession declared in 2026?', sub: 'Resolves on NBER dating' },
-    { q: 'Will inflation print above 3% in December?', sub: 'Resolves on CPI release' },
-    { q: 'Will the S&P 500 close the year above 7,000?', sub: 'Resolves on Dec 31 close' },
-    { q: 'Gold above $3,500/oz at year end?', sub: 'Resolves on spot close' },
-  ]},
-  { section: 'Tech & AI', events: [
-    { q: 'Will Apple announce AR glasses in 2026?', sub: 'Resolves on official launch' },
-    { q: 'Will an AI system win a gold-medal IMO score this year?', sub: 'Resolves on verified result' },
-    { q: 'SpaceX Starship reaches orbit with crew before 2027?', sub: 'Resolves on crewed orbital flight' },
-    { q: 'Will Waymo operate in 20+ US cities by year end?', sub: 'Resolves on public service map' },
-  ]},
-  { section: 'Sports & Culture', events: [
-    { q: 'Will the Chiefs win Super Bowl LXI?', sub: 'Resolves on the final' },
-    { q: 'Real Madrid to win the 2026-27 Champions League?', sub: 'Resolves on the final' },
-    { q: 'Will Taylor Swift announce a 2027 world tour?', sub: 'Resolves on official announcement' },
-    { q: 'Will GTA VI ship in 2026?', sub: 'Resolves on retail release' },
-  ]},
+  { cat: 'Crypto', icon: '\u20bf', q: 'Will BTC trade above its live price at resolution?', sub: 'auto-resolved by the oracle agent', auto: true, vol: '$4B Vol.' },
+  { cat: 'Crypto', icon: '\u20bf', q: 'Will Bitcoin hit $100k in 2026?', vol: '$2.1B Vol.' },
+  { cat: 'Crypto', icon: '\u25ce', q: 'Will Solana flip $300 this year?', vol: '$640M Vol.' },
+  { cat: 'Crypto', icon: '\u25d1', q: 'US spot-Solana ETF approved this year?', vol: '$212M Vol.' },
+  { cat: 'Crypto', icon: '\u263e', q: 'Midnight NIGHT lists on a top-5 exchange in 2026?', vol: '$18M Vol.' },
+  { cat: 'Politics', icon: '\u2b24', q: 'Will Democrats win the 2028 presidential election?', vol: '$1.8B Vol.' },
+  { cat: 'Politics', icon: '\u2b24', q: 'JD Vance wins the 2028 Republican nomination?', vol: '$820M Vol.' },
+  { cat: 'Politics', icon: '\u2b24', q: 'Newsom wins the 2028 Democratic nomination?', vol: '$610M Vol.' },
+  { cat: 'Politics', icon: '\u2b24', q: 'Government shutdown before October?', vol: '$95M Vol.' },
+  { cat: 'Finance', icon: '\u0024', q: 'Fed cuts rates at the September FOMC?', vol: '$430M Vol.' },
+  { cat: 'Finance', icon: '\u0024', q: 'S&P 500 closes the year above 7,000?', vol: '$310M Vol.' },
+  { cat: 'Finance', icon: '\u0024', q: 'US recession declared in 2026?', vol: '$150M Vol.' },
+  { cat: 'Finance', icon: '\u0024', q: 'Gold above $3,500/oz at year end?', vol: '$88M Vol.' },
+  { cat: 'Tech', icon: '\u26a1', q: 'OpenAI releases GPT-6 before 2027?', vol: '$120M Vol.' },
+  { cat: 'Tech', icon: '\u26a1', q: 'AI wins a gold-medal IMO score this year?', vol: '$75M Vol.' },
+  { cat: 'Tech', icon: '\u26a1', q: 'Starship reaches orbit with crew before 2027?', vol: '$66M Vol.' },
+  { cat: 'Tech', icon: '\u26a1', q: 'Apple announces AR glasses in 2026?', vol: '$41M Vol.' },
+  { cat: 'Sports', icon: '\u26bd', q: 'Chiefs win Super Bowl LXI?', vol: '$390M Vol.' },
+  { cat: 'Sports', icon: '\u26bd', q: 'Real Madrid win the 2026-27 Champions League?', vol: '$240M Vol.' },
+  { cat: 'Culture', icon: '\u266a', q: 'Taylor Swift announces a 2027 world tour?', vol: '$52M Vol.' },
+  { cat: 'Culture', icon: '\u25b6', q: 'GTA VI ships in 2026?', vol: '$180M Vol.' },
 ];
-const board = $('events-board');
-if (board) {
-  for (const sec of CATALOG) {
-    const h = document.createElement('p');
-    h.className = 'step-label';
-    h.style.cssText = 'font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--lamplight);margin:18px 0 10px;grid-column:1/-1';
-    h.textContent = sec.section;
-    board.appendChild(h);
-    for (const ev of sec.events) {
-      const node = document.getElementById('event-card-tpl').content.firstElementChild.cloneNode(true);
-      node.querySelector('.ev-q').textContent = ev.q;
-      node.querySelector('.ev-sub').textContent = ev.sub + (ev.auto ? '' : ' · host resolves YES/NO');
-      node.addEventListener('click', () =>
-        act(ev.auto ? { type: 'game-new', market: true } : { type: 'game-new', market: true, question: ev.q }));
-      board.appendChild(node);
-    }
+const CATS = ['Trending', 'Politics', 'Crypto', 'Finance', 'Tech', 'Sports', 'Culture'];
+let activeCat = 'Trending';
+function openMarket(ev) {
+  act(ev.auto ? { type: 'game-new', market: true } : { type: 'game-new', market: true, question: ev.q });
+}
+function buildBoard() {
+  const tabs = $('board-tabs');
+  tabs.innerHTML = '';
+  for (const c of CATS) {
+    const t = document.createElement('button');
+    t.className = 'board-tab' + (c === activeCat ? ' on' : '');
+    t.textContent = c;
+    t.addEventListener('click', () => { activeCat = c; buildBoard(); });
+    tabs.appendChild(t);
+  }
+  const board = $('events-board');
+  board.innerHTML = '';
+  const list = activeCat === 'Trending'
+    ? [CATALOG[0], CATALOG[5], CATALOG[9], CATALOG[13], CATALOG[17], CATALOG[1], CATALOG[20], CATALOG[3]]
+    : CATALOG.filter((e) => e.cat === activeCat);
+  for (const ev of list) {
+    const card = document.createElement('div');
+    card.className = 'pm-card';
+    card.innerHTML =
+      '<div class="pm-top"><span class="pm-icon">' + ev.icon + '</span><span class="pm-q">' + ev.q + '</span></div>' +
+      '<div class="pm-odds"><span class="pm-lock">\uD83D\uDD12</span> odds sealed — forecasts are private until resolution</div>' +
+      '<div class="pm-actions"><button class="pm-yes">Yes</button><button class="pm-no">No</button></div>' +
+      '<div class="pm-foot"><span>' + (ev.vol || '') + '</span><span>' + (ev.auto ? 'oracle agent resolves' : (ev.sub || 'host resolves YES/NO')) + '</span></div>';
+    card.addEventListener('click', () => openMarket(ev));
+    board.appendChild(card);
   }
 }
+if ($('events-board')) buildBoard();
 const agentForm = $('agent-form');
 if (agentForm) {
   agentForm.addEventListener('submit', (e) => {
@@ -319,5 +319,10 @@ $('reveal-guess-button').addEventListener('click', () => act({ type: 'game-revea
 $('close-sealing-button').addEventListener('click', () => act({ type: 'game-close' }));
 $('reckon-button').addEventListener('click', () => act({ type: 'game-reckon' }));
 $('finalize-game-button').addEventListener('click', () => act({ type: 'game-finalize' }));
+
+$('back-to-markets').addEventListener('click', (e) => {
+  e.preventDefault();
+  act({ type: 'game-leave' }).then(() => location.reload());
+});
 
 poll();

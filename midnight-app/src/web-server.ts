@@ -574,6 +574,11 @@ async function apiAction(body: any): Promise<any> {
       });
       return { ok: true };
     }
+    case 'game-leave': {
+      gameAddress = '';
+      marketThreshold = null;
+      return { ok: true };
+    }
     case 'game-add-agent': {
       const raw = String(body?.name ?? '').trim().toLowerCase().replace(/[^a-z0-9- ]/g, '').replace(/\s+/g, '-').slice(0, 20);
       if (!raw) return { error: 'Name your agent first.' };
