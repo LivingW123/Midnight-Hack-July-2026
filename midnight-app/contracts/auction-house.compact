@@ -127,6 +127,13 @@ export circuit bidCommitment(amount: Uint<64>, bundle: Uint<64>, nonce: Bytes<32
   return persistentCommit<Vector<2, Uint<64>>>([amount, bundle], nonce);
 }
 
+// Exported so the seller can build the constructor argument off-chain with the
+// exact scheme openSchedule will later verify against — no second
+// implementation to drift out of sync.
+export circuit scheduleCommitment(tick: Uint<64>, nonce: Bytes<32>): Bytes<32> {
+  return persistentCommit<Uint<64>>(tick, nonce);
+}
+
 circuit bestOfBundle(mask: Uint<64>): Uint<64> {
   return bundleBest.member(mask) ? bundleBest.lookup(mask) : 0 as Uint<64>;
 }
@@ -211,8 +218,7 @@ export circuit openSchedule(): [] {
   assert(!scheduleOpen, "schedule already open");
   assert(format == Format.candle || format == Format.timelock, "this format has no schedule");
   const secret = scheduleSecret();
-  const commitment = persistentCommit<Uint<64>>(secret, scheduleNonce());
-  assert(scheduleCommit == commitment, "does not open the committed schedule");
+  assert(scheduleCommit == scheduleCommitment(secret, scheduleNonce()), "does not open the committed schedule");
   scheduleTick = disclose(secret);
   scheduleOpen = true;
 }
