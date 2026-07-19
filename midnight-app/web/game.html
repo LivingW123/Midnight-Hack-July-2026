@@ -109,6 +109,43 @@
   .champion-note .mono { font-size: 12px; }
 
   .phase-rail-4 li { padding: 0 14px; }
+
+  /* ── Paper theme: the whole market wears the table's white style ── */
+  html { color-scheme: light; }
+  body { background: var(--paper); color: var(--ink); }
+  .masthead .wordmark, .lot-title { color: var(--ink); }
+  .tagline, .masthead-net, .rules { color: var(--ink-soft); }
+  .rules b { color: var(--wax); }
+  .lot-eyebrow { color: var(--wax); }
+  .nav-link { color: var(--wax); text-decoration: none; }
+  .net-dot { background: #b9b2a0; }
+  .phase-rail { color: var(--ink-soft); }
+  .phase-rail li + li::before { background: var(--paper-line); }
+  .phase-tick { border-color: var(--ink-soft); }
+  .phase-rail li.is-current { color: var(--ink); }
+  .phase-rail li.is-current .phase-tick { border-color: var(--wax); background: var(--wax); box-shadow: none; }
+  .phase-rail li.is-past .phase-tick { background: var(--ink-soft); }
+  .panel { background: #fdfbf5; border-color: var(--paper-line); }
+  .panel-title, .chatter-title { color: var(--ink); }
+  .field-help { color: var(--ink-soft); }
+  .btn-ghost { color: var(--ink); border-color: var(--paper-line); background: var(--paper); }
+  .btn-ghost:hover:not([disabled]) { border-color: var(--ink-soft); }
+  .btn-primary { background: var(--wax); color: var(--paper); }
+  .btn-primary:hover:not([disabled]) { background: #a63d33; }
+  .btn-line { color: var(--wax); border-color: var(--wax); background: transparent; }
+  .number-line input, #agent-input { background: #fff !important; border-color: var(--paper-line) !important; color: var(--ink); }
+  .number-line input:focus, #agent-input:focus { border-color: var(--wax) !important; }
+  .sealed-number { background: #fff; border-color: var(--paper-line); }
+  .sealed-number .num { color: var(--wax); }
+  .sealed-number .cap { color: var(--ink-soft); }
+  .job-bar { background: var(--paper-shade); }
+  .job-bar-fill { background: var(--wax); }
+  .job-top, .job-stage { color: var(--ink-soft); }
+  .record-sheet { box-shadow: 0 1px 0 #00000008, 0 14px 40px #00000018; border: 1px solid var(--paper-line); }
+  .toast { background: var(--ink); color: var(--paper); }
+  .step-label { color: var(--wax) !important; }
+  .champion-note { color: var(--ink); }
+
 </style>
 </head>
 <body>
