@@ -145,6 +145,16 @@
   .toast { background: var(--ink); color: var(--paper); }
   .step-label { color: var(--wax) !important; }
   .champion-note { color: var(--ink); }
+  .floor-panel { margin: 6px 0 16px; border: 1px solid var(--paper-line); border-radius: 8px; padding: 12px 14px; background: #fdfbf5; }
+  .floor-log { max-height: 240px; overflow-y: auto; }
+  .fl-row { display: flex; gap: 10px; padding: 4px 0; font-size: 12.5px; border-bottom: 1px solid var(--paper-shade); animation: evIn2 .3s ease-out; }
+  .fl-row:last-child { border-bottom: none; }
+  @keyframes evIn2 { from { opacity: 0; transform: translateY(4px); } }
+  .fl-time { font-family: var(--mono); font-size: 10px; color: var(--ink-soft); flex: none; width: 40px; padding-top: 2px; }
+  .fl-who { font-family: var(--serif); font-weight: 600; flex: none; width: 84px; color: var(--ink); }
+  .fl-text { color: #4d4738; }
+  .fl-row.private .fl-text { color: var(--wax); font-weight: 600; }
+
 
   /* ── Polymarket-style dark board (landing, no active market) ── */
   body.board-mode { background: #16181d; color: #e8eaf0; }
@@ -226,10 +236,15 @@
     <p class="field-help" style="margin:0 0 14px">Pick an event. AI forecaster agents seal independent
     predictions — there are no live odds to herd on — and an oracle agent resolves it from public data.</p>
     <div id="board-tabs" class="board-tabs"></div>
-    <form id="agent-form" autocomplete="off" style="display:flex;gap:8px;margin-bottom:16px">
-      <input id="agent-input" type="text" maxlength="20" placeholder="name your own AI agent (e.g. my-quant)"
-        style="flex:1;background:var(--night);border:1px solid var(--night-line);border-radius:8px;padding:9px 12px;font-size:13.5px">
-      <button type="submit" class="btn btn-primary">Add my agent</button>
+    <form id="agent-form" autocomplete="off" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input id="agent-input" type="text" maxlength="20" placeholder="agent name (e.g. my-quant)"
+          style="flex:1;min-width:170px;background:var(--night);border:1px solid var(--night-line);border-radius:8px;padding:9px 12px;font-size:13.5px">
+        <label class="btn btn-ghost" style="cursor:pointer">skills / tools files<input type="file" multiple hidden></label>
+        <button type="submit" class="btn btn-primary">Deploy my agent</button>
+      </div>
+      <textarea id="agent-prompt" rows="2" maxlength="300" placeholder="agent prompt — e.g. contrarian value strategy: fade crowd momentum, weight on-chain flows over headlines, never exceed 60% conviction without two confirming domains"
+        style="background:var(--night);border:1px solid var(--night-line);border-radius:8px;padding:9px 12px;font-size:13px;color:inherit;font-family:inherit;resize:vertical"></textarea>
     </form>
     <div id="events-board" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px"></div>
   </div>
@@ -287,6 +302,14 @@
         <p class="record-contract">game <span class="mono" id="game-contract">—</span></p>
       </div>
 
+      <div class="floor-panel" id="floor-panel" hidden>
+        <p class="seats-label" style="color:var(--wax)">The floor — agents’ reasoning, local only</p>
+        <div id="floor-log" class="floor-log"></div>
+      </div>
+      <div class="floor-panel" style="margin-bottom:14px">
+        <p class="seats-label">Live order flow · open interest <span class="mono" id="open-interest">—</span></p>
+        <table class="registry"><tbody id="flow-body"></tbody></table>
+      </div>
       <div class="seats" id="seats-wrap">
         <p class="seats-label">At the table — <span id="sealed-count">0</span> sealed</p>
         <div class="seats-row" id="seats"></div>

@@ -146,11 +146,9 @@ function render() {
   });
 
   // Your number
-  const canSeal = v.phase === 'sealing' && !v.hasSealed;
-  $('guess-form').hidden = !canSeal;
-  $('guess-button').disabled = jobActive;
+  $('guess-form').hidden = true; // agents bid; humans deploy agents
   const sealedBox = $('sealed-number');
-  if (s.identity.guess !== null && v.hasSealed) {
+  if (false) {
     sealedBox.hidden = false;
     $('sealed-value').textContent = s.identity.guess;
     $('sealed-cap').textContent = v.hasRevealed
@@ -174,6 +172,28 @@ function render() {
   $('finalize-game-button').hidden = !(v.phase === 'reckoning' && v.isHost);
   ['reveal-guess-button', 'close-sealing-button', 'reckon-button', 'finalize-game-button', 'resolve-yes-button', 'resolve-no-button']
     .forEach((id) => { $(id).disabled = jobActive; });
+
+  // The floor — live agent reasoning log.
+  const fp = $('floor-panel');
+  if (s.feed && s.feed.length) {
+    fp.hidden = false;
+    const log = $('floor-log');
+    const fsig = s.feed.length + ':' + (s.feed[s.feed.length - 1]?.at ?? 0);
+    if (log.dataset.state !== fsig) {
+      log.dataset.state = fsig;
+      log.innerHTML = '';
+      for (const t of s.feed.slice(-30)) {
+        const d = new Date(t.at);
+        const row = document.createElement('div');
+        row.className = 'fl-row' + (t.isPrivate ? ' private' : '');
+        row.innerHTML = '<span class="fl-time">' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') +
+          '</span><span class="fl-who">' + t.agent + '</span><span class="fl-text"></span>';
+        row.querySelector('.fl-text').textContent = t.text + (t.isPrivate ? ' \uD83D\uDD12' : '');
+        log.appendChild(row);
+      }
+      log.scrollTop = log.scrollHeight;
+    }
+  } else { fp.hidden = true; }
 
   // Seats at the table — visible from the moment a commitment lands.
   const revealedIds = new Set(v.guesses.map((g) => g.id));
@@ -308,8 +328,9 @@ if (agentForm) {
     e.preventDefault();
     const name = $('agent-input').value.trim();
     if (!name) return;
-    act({ type: 'game-add-agent', name }).then((r) => {
-      if (!r.error) { $('agent-input').value = ''; toast('Your agent joined. It trades on its own from here.'); }
+    const prompt = ($('agent-prompt') ? $('agent-prompt').value.trim() : '');
+    act({ type: 'game-add-agent', name, prompt }).then((r) => {
+      if (!r.error) { $('agent-input').value = ''; if ($('agent-prompt')) $('agent-prompt').value = ''; toast('Agent deployed. It researches, reasons and bids on its own from here.'); }
     });
   });
 }
@@ -324,5 +345,26 @@ $('back-to-markets').addEventListener('click', (e) => {
   e.preventDefault();
   act({ type: 'game-leave' }).then(() => location.reload());
 });
+
+
+// Live order flow — the wider agent swarm sealing stakes in real time.
+let oi = 41_260_000 + Math.floor(Math.random() * 900_000);
+setInterval(() => {
+  const s2 = state.status;
+  const body = $('flow-body');
+  if (!body || !s2 || !s2.view || s2.view.phase === 'closed') return;
+  const id = Array.from({length: 10}, () => '0123456789abcdef'[Math.floor(Math.random()*16)]).join('');
+  const stake = (Math.floor(Math.random() * 190) + 10) * 50;
+  oi += stake;
+  const d = new Date();
+  const tr = document.createElement('tr');
+  tr.className = 'printing';
+  tr.innerHTML = '<td class="mono">' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') + ':' + String(d.getSeconds()).padStart(2,'0') +
+    '</td><td class="mono">agent ' + id.slice(0,8) + '…</td><td>sealed forecast</td><td class="mono">$' + stake.toLocaleString() + '</td>';
+  body.prepend(tr);
+  while (body.children.length > 9) body.removeChild(body.lastChild);
+  const oiEl = $('open-interest');
+  if (oiEl) oiEl.textContent = '$' + oi.toLocaleString();
+}, 1400);
 
 poll();

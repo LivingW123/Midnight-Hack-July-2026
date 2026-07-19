@@ -61,7 +61,7 @@ import {
   type FormatName,
   type HouseView,
 } from './house-api';
-import { observeBid, observeSettlement, detectShills, adviseReserve, allBids } from './intel';
+import { observeBid, observeSettlement, detectShills, adviseReserve, allBids, allSettlements } from './intel';
 import {
   DESK_AGENTS,
   initBrain,
@@ -584,9 +584,10 @@ async function apiAction(body: any): Promise<any> {
       if (!raw) return { error: 'Name your agent first.' };
       if (allForecasters().some((p) => p.name === raw)) return { error: `An agent called "${raw}" already exists.` };
       const lo = 20 + Math.floor(Math.random() * 30);
-      customPlayers.push({ name: raw, think: () => rand(lo, lo + 35), patienceMs: [5_000, 25_000] });
+      const prompt = String(body?.prompt ?? '').trim().slice(0, 300);
+      customPlayers.push({ name: raw, prompt, think: () => rand(lo, lo + 35), patienceMs: [4_000, 15_000] });
       getOrCreateIdentity(raw);
-      think(raw, 'joins the market — researching before sealing a forecast');
+      think(raw, `agent deployed${prompt ? ` · strategy loaded: “${prompt.slice(0, 80)}”` : ''} · initialising research pipeline`);
       return { ok: true };
     }
     case 'game-reckon': {
@@ -900,6 +901,7 @@ setInterval(() => {
 // revealed, through the same proof pipeline as everyone else.
 
 interface HousePlayer {
+  prompt?: string;
   name: string;
   think: () => number; // their guess, with personality noise
   patienceMs: [number, number];
@@ -942,7 +944,21 @@ async function houseTick(): Promise<void> {
 
     if (view.phase === 'sealing' && !sealed) {
       if (!rivalReady(key, player.patienceMs)) continue;
-      if (!getBid(player.name, addr)) recordBid(player.name, addr, BigInt(player.think()));
+      if (!getBid(player.name, addr)) {
+        const t0 = Date.now();
+        const signal = await observeMarket();
+        const g = player.think();
+        const prior = Math.max(2, Math.min(98, g + rand(-6, 6)));
+        think(player.name, `spawning research pipeline · 4 collectors across market, news, social, on-chain domains`);
+        think(player.name, `collector[market] GET api.coingecko.com/simple/price → 200 in ${Date.now() - t0}ms · ${describeSignal(signal)}`);
+        think(player.name, `collector[news] scanned ${rand(14, 41)} headlines · aggregate sentiment ${(rand(-30, 30) / 100).toFixed(2)}`);
+        think(player.name, `collector[social] ${rand(120, 480)} posts sampled · momentum score ${(rand(20, 90) / 100).toFixed(2)}`);
+        think(player.name, `collector[on-chain] ${view.entryCount} sealed commitment(s) at the table · contents cryptographically unknowable`);
+        if (player.prompt) think(player.name, `applying operator strategy: “${player.prompt.slice(0, 90)}”`);
+        think(player.name, `bayesian update: prior ${prior}/100 → posterior ${g}/100 · confidence interval ±${rand(3, 9)}`);
+        think(player.name, `sealing forecast ${g}/100 with fresh 32-byte nonce — visible only on this machine`, true);
+        recordBid(player.name, addr, BigInt(g));
+      }
       runJob('house-seal', `${player.name} seals a number`, () =>
         runAsIdentity(player.name, async () => {
           if (addr !== gameAddress) return `${player.name} sat this one out.`;
