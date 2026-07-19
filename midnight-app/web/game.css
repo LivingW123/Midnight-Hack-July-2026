@@ -1,0 +1,230 @@
+/* Sealed markets — the prediction-market view where you deploy agents.
+   Page-scoped only; tokens, buttons and panels come from styles.css. */
+
+.game-main { max-width: 720px; margin: 0 auto; padding: 0 24px 70px; }
+.back { color: var(--dusk); text-decoration: none; font-size: var(--text-sm); }
+.back:hover { color: var(--moon); }
+
+.rules {
+  color: var(--dusk); font-size: var(--text-sm); max-width: 56ch;
+  margin: 0 auto 26px; text-align: center;
+}
+.rules b { color: var(--lamplight); font-weight: 600; }
+
+.number-line { display: flex; gap: 10px; align-items: stretch; }
+.number-line input {
+  width: 110px; background: var(--night); border: 1px solid var(--night-line);
+  border-radius: 8px; padding: 9px 12px; font-family: var(--mono); font-size: var(--text-2xl);
+  text-align: center;
+}
+.number-line input:focus { border-color: var(--lamplight); }
+
+.sealed-number {
+  display: flex; align-items: center; gap: 14px;
+  background: linear-gradient(175deg, #262138, #1d1a2c);
+  border: 1px solid var(--night-line); border-radius: 10px; padding: 16px 18px;
+}
+.sealed-number .wax-mini {
+  width: 34px; height: 34px; border-radius: 50%; flex: none;
+  background: radial-gradient(circle at 35% 30%, #b0453b, var(--wax) 55%, var(--wax-deep));
+  box-shadow: inset 0 0 0 4px #7c2a2455;
+}
+.sealed-number .num { font-family: var(--mono); font-size: 24px; color: var(--lamplight); }
+.sealed-number .cap { font-size: var(--text-xs); color: var(--dusk); }
+
+/* Histogram */
+.histo-wrap { margin-top: 8px; }
+.histo {
+  position: relative; height: 150px; margin: 26px 6px 0;
+  border-bottom: 2px solid var(--ink);
+}
+.h-dot {
+  position: absolute; bottom: 8px; width: 15px; height: 15px;
+  border-radius: 50%; transform: translateX(-50%);
+  background: radial-gradient(circle at 35% 30%, #4b4368, #322b4a);
+  border: 1.5px solid #262138;
+  animation: dropIn 0.5s cubic-bezier(.3,1.5,.5,1);
+}
+.h-dot.champ { background: radial-gradient(circle at 35% 30%, #f0bd75, var(--lamplight)); border-color: #b57f33; }
+.h-dot .h-name {
+  position: absolute; top: -17px; left: 50%; transform: translateX(-50%);
+  font-family: var(--mono); font-size: 9.5px; color: var(--ink-soft); white-space: nowrap;
+}
+.h-dot .h-val {
+  position: absolute; bottom: -22px; left: 50%; transform: translateX(-50%);
+  font-family: var(--mono); font-size: var(--text-3xs); color: var(--ink);
+}
+.h-dot .h-name.up { top: -32px; }
+.h-dot .h-val.down { bottom: -36px; }
+
+/* Seats at the table */
+.seats { margin-top: 14px; }
+.seats-label {
+  font-size: var(--text-3xs); letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 600; margin-bottom: 8px;
+}
+.seats-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.seat {
+  display: inline-flex; align-items: center; gap: 7px;
+  border: 1px solid var(--paper-line); border-radius: 999px;
+  padding: 4px 12px 4px 7px; font-size: var(--text-xs); color: var(--ink);
+  background: #fdfbf5;
+}
+.seat .seat-wax {
+  width: 14px; height: 14px; border-radius: 50%; flex: none;
+  background: radial-gradient(circle at 35% 30%, #b0453b, var(--wax) 55%, var(--wax-deep));
+}
+.seat.revealed .seat-wax { background: radial-gradient(circle at 35% 30%, #f0bd75, var(--lamplight)); }
+.seat .seat-commit { font-family: var(--mono); font-size: var(--text-3xs); color: var(--ink-soft); }
+.seat.you { border-color: var(--lamplight); }
+.seats-empty { color: var(--ink-soft); font-size: var(--text-xs); }
+@keyframes dropIn { from { transform: translateX(-50%) translateY(-40px); opacity: 0; } }
+.h-target {
+  position: absolute; bottom: 0; top: -6px; width: 0;
+  border-left: 2px dashed var(--wax); transform: translateX(-50%);
+  animation: targetDrop 0.6s ease-out;
+}
+@keyframes targetDrop { from { top: -40px; opacity: 0; } }
+.h-target .t-label {
+  position: absolute; top: -22px; left: 50%; transform: translateX(-50%);
+  font-family: var(--serif); font-weight: 600; font-size: var(--text-sm); color: var(--wax);
+  white-space: nowrap; background: var(--paper); padding: 0 6px;
+}
+.h-axis { display: flex; justify-content: space-between; margin: 26px 6px 0; font-family: var(--mono); font-size: var(--text-3xs); color: var(--ink-soft); }
+.histo-empty { color: var(--ink-soft); font-size: var(--text-sm); padding: 26px 4px 8px; text-align: center; }
+
+.champion-note {
+  margin-top: 18px; text-align: center; font-family: var(--serif);
+  font-size: var(--text-xl); color: var(--ink);
+}
+.champion-note .mono { font-size: var(--text-xs); }
+
+.phase-rail-4 li { padding: 0 14px; }
+body.no-market .side-label, body.no-market .record-sheet, body.no-market .chart-wrap,
+body.no-market #floor-panel, body.no-market #my-agents { display: none !important; }
+/* dark market view */
+#seats-wrap, .histo-wrap, .record-facts, .record-footnote, .record-head { display: none !important; }
+.record-sheet { background: #1e2128; border: 1px solid #2c3039; box-shadow: none; }
+.registry td, .registry th { color: #c9cdd8; border-color: #2c3039; }
+.floor-panel { background: #1e2128; border-color: #2c3039; }
+.seats-label { color: #8b91a0 !important; }
+.fl-row { border-color: #262a33; }
+.fl-who { color: #e8eaf0; } .fl-text { color: #9aa0ae; } .fl-time { color: #6f7584; }
+.fl-row.private .fl-text { color: #e3a44f; }
+.my-agent { background: #1e2128 !important; border: 1px solid #3a3f4b !important; }
+.ma-name { color: #e8eaf0 !important; } .ma-amt { color: #e8eaf0 !important; } .ma-state { color: #8b91a0 !important; }
+.my-agent .btn-ghost { background: #262a33 !important; color: #e8eaf0 !important; border-color: #2c3039 !important; }
+.my-agent input, .my-agent textarea { background: #16181d !important; border-color: #2c3039 !important; color: #e8eaf0 !important; }
+.chart-label { color: #8b91a0; }
+.phase-banner { border-color: #2c3039; color: #e8eaf0; background: #1e2128; border-radius: 8px; padding: 10px; font-size: var(--text-md); }
+.champion-note { color: #e8eaf0; }
+.sold-stamp { mix-blend-mode: normal; }
+.rules, #phase-rail { display: none !important; }
+#guess-form, #sealed-number, #play-panel .panel-title, #reveal-guess-button, #close-sealing-button, #reckon-button, #finalize-game-button, #resolve-yes-button, #resolve-no-button { display: none !important; }
+.my-agent { border: 1px solid var(--wax); border-radius: 10px; padding: 13px 16px; margin-bottom: 12px; background: #fdfbf5; }
+.my-agent .ma-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.my-agent .ma-name { font-family: var(--serif); font-weight: 600; font-size: var(--text-lg); color: var(--ink); }
+.ma-side { font-family: var(--mono); font-weight: 700; font-size: var(--text-sm); border-radius: 6px; padding: 3px 10px; }
+.ma-side.yes { background: #1e3a2c; color: #5fd694; } .ma-side.no { background: #3a2226; color: #f06a6a; }
+.ma-amt { font-family: var(--mono); font-size: var(--text-sm); color: var(--ink); }
+.ma-state { margin-left: auto; font-family: var(--mono); font-size: var(--text-2xs); color: var(--ink-soft); }
+.chart-wrap { margin: 10px 0 4px; }
+.chart-label { display: flex; justify-content: space-between; font-size: var(--text-2xs); color: var(--ink-soft); font-family: var(--mono); margin-bottom: 4px; }
+.chart-label .big { font-size: var(--text-2xl); color: #12855e; font-weight: 700; }
+
+/* ── Paper theme: the whole market wears the table's white style ── */
+html { color-scheme: light; }
+body { background: var(--paper); color: var(--ink); }
+.masthead .wordmark, .lot-title { color: var(--ink); }
+.tagline, .masthead-net, .rules { color: var(--ink-soft); }
+.rules b { color: var(--wax); }
+.lot-eyebrow { color: var(--wax); }
+.nav-link { color: var(--wax); text-decoration: none; }
+.net-dot { background: #b9b2a0; }
+.phase-rail { color: var(--ink-soft); }
+.phase-rail li + li::before { background: var(--paper-line); }
+.phase-tick { border-color: var(--ink-soft); }
+.phase-rail li.is-current { color: var(--ink); }
+.phase-rail li.is-current .phase-tick { border-color: var(--wax); background: var(--wax); box-shadow: none; }
+.phase-rail li.is-past .phase-tick { background: var(--ink-soft); }
+.panel { background: #fdfbf5; border-color: var(--paper-line); }
+.panel-title, .chatter-title { color: var(--ink); }
+.field-help { color: var(--ink-soft); }
+.btn-ghost { color: var(--ink); border-color: var(--paper-line); background: var(--paper); }
+.btn-ghost:hover:not([disabled]) { border-color: var(--ink-soft); }
+.btn-primary { background: var(--wax); color: var(--paper); }
+.btn-primary:hover:not([disabled]) { background: #a63d33; }
+.btn-line { color: var(--wax); border-color: var(--wax); background: transparent; }
+.number-line input, #agent-input { background: #fff !important; border-color: var(--paper-line) !important; color: var(--ink); }
+.number-line input:focus, #agent-input:focus { border-color: var(--wax) !important; }
+.sealed-number { background: #fff; border-color: var(--paper-line); }
+.sealed-number .num { color: var(--wax); }
+.sealed-number .cap { color: var(--ink-soft); }
+.job-bar { background: var(--paper-shade); }
+.job-bar-fill { background: var(--wax); }
+.job-top, .job-stage { color: var(--ink-soft); }
+.record-sheet { box-shadow: 0 1px 0 #00000008, 0 14px 40px #00000018; border: 1px solid var(--paper-line); }
+.toast { background: var(--ink); color: var(--paper); }
+.step-label { color: var(--wax) !important; }
+.champion-note { color: var(--ink); }
+.floor-panel { margin: 6px 0 16px; border: 1px solid var(--paper-line); border-radius: 8px; padding: 12px 14px; background: #fdfbf5; }
+.floor-log { max-height: 240px; overflow-y: auto; }
+.fl-row { display: flex; gap: 10px; padding: 4px 0; font-size: var(--text-xs); border-bottom: 1px solid var(--paper-shade); animation: evIn2 .3s ease-out; }
+.fl-row:last-child { border-bottom: none; }
+@keyframes evIn2 { from { opacity: 0; transform: translateY(4px); } }
+.fl-time { font-family: var(--mono); font-size: var(--text-3xs); color: var(--ink-soft); flex: none; width: 40px; padding-top: 2px; }
+.fl-who { font-family: var(--serif); font-weight: 600; flex: none; width: 84px; color: var(--ink); }
+.fl-text { color: #4d4738; }
+.fl-row.private .fl-text { color: var(--wax); font-weight: 600; }
+
+
+/* ── Polymarket-style dark board (landing, no active market) ── */
+body.board-mode { background: #16181d; color: #e8eaf0; }
+body.board-mode .masthead .wordmark, body.board-mode .lot-title { color: #f2f3f7; }
+body.board-mode .lot-eyebrow { color: #e3a44f; }
+body.board-mode .rules, body.board-mode .tagline, body.board-mode .masthead-net { color: #9aa0ae; }
+body.board-mode .rules b { color: #e3a44f; }
+body.board-mode .phase-rail { display: none; }
+body.board-mode .game-main { max-width: 1160px; }
+body.board-mode .panel { background: transparent; border: none; padding: 0; }
+body.board-mode .panel-title, body.board-mode .field-help { color: #9aa0ae; }
+body.board-mode #agent-input { background: #1e2128 !important; border-color: #2c3039 !important; color: #e8eaf0; }
+body.board-mode #events-board { grid-template-columns: repeat(auto-fill, minmax(255px, 1fr)); gap: 12px; }
+.board-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 14px; }
+.board-tab {
+  background: transparent; border: none; color: #9aa0ae; font: inherit; font-size: var(--text-md); font-weight: 600;
+  padding: 7px 13px; border-radius: 8px; cursor: pointer;
+}
+.board-tab:hover { color: #e8eaf0; }
+.board-tab.on { background: #262a33; color: #e3a44f; }
+.pm-card {
+  background: #1e2128; border: 1px solid #2c3039; border-radius: 12px; padding: 14px;
+  cursor: pointer; transition: border-color .15s, transform .1s; display: flex; flex-direction: column; gap: 10px;
+}
+.pm-card:hover { border-color: #4a5060; transform: translateY(-1px); }
+.pm-top { display: flex; gap: 10px; align-items: flex-start; }
+.pm-icon {
+  flex: none; width: 38px; height: 38px; border-radius: 8px; display: grid; place-items: center;
+  background: linear-gradient(150deg, #2c3039, #23262e); color: #e3a44f; font-size: var(--text-xl); font-weight: 700;
+}
+.pm-q { font-weight: 600; font-size: var(--text-md); line-height: 1.35; color: #e8eaf0; }
+.pm-odds { font-size: var(--text-2xs); color: #8b91a0; display: flex; gap: 7px; align-items: center; }
+.pm-lock { font-size: var(--text-xs); }
+.pm-actions { display: flex; gap: 8px; }
+.pm-actions button {
+  flex: 1; border: none; border-radius: 8px; padding: 8px 0; font: inherit; font-weight: 700; font-size: var(--text-sm); cursor: pointer;
+}
+.pm-yes { background: #1e3a2c; color: #5fd694; }
+.pm-yes:hover { background: #25543c; }
+.pm-no { background: #3a2226; color: #f06a6a; }
+.pm-no:hover { background: #542b31; }
+.pm-foot { display: flex; justify-content: space-between; font-size: var(--text-2xs); color: #6f7584; font-family: var(--mono); }
+
+/* Phones. The board is fluid already; this is about gutters and the big
+   numerals, which overflow a 360px viewport at their desktop size. */
+@media (max-width: 560px) {
+  .game-main { padding: 0 var(--space-4) var(--space-10); }
+  body.board-mode #events-board { grid-template-columns: 1fr; }
+  .num { font-size: var(--text-3xl); }
+  .seats { gap: var(--space-2); }
+}

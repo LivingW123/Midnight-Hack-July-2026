@@ -446,6 +446,8 @@ async function poll(immediate = false) {
   try {
     state.status = await api('/api/house-status');
     render();
+    // First successful render — drop the skeleton shimmer.
+    document.body.classList.remove('is-loading');
     if (state.status.ready && state.status.houseAddress) {
       state.intel = await api('/api/intel');
       renderIntel();

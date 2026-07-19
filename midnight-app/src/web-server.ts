@@ -43,7 +43,6 @@ import {
   setActiveGame,
   recordGame,
   getRecordedGame,
-  twoThirdsMean,
   type GameView,
 } from './game-api';
 import {
@@ -194,9 +193,9 @@ async function boot() {
       setActiveGame(recordedGame);
       game = await connectGame(gameProviders, recordedGame);
       gameAddress = recordedGame;
-      console.log(`  Number Game: ${gameAddress}`);
+      console.log(`  Market: ${gameAddress}`);
     } catch (err: any) {
-      console.log(`  (recorded Number Game unreachable: ${err?.message ?? err})`);
+      console.log(`  (recorded market unreachable: ${err?.message ?? err})`);
     }
   }
 
@@ -533,26 +532,25 @@ async function apiAction(body: any): Promise<any> {
       return { ok: true };
     }
     case 'game-new': {
-      const isMarket = Boolean(body?.market);
-      let question = String(body?.question ?? '').trim().slice(0, 140) ||
-        'Guess a number from 1 to 100. Closest to two-thirds of the mean wins.';
-      if (isMarket) {
-        if (body?.question) {
-          marketThreshold = null; // host resolves YES/NO manually
-        } else {
-          const signal = await observeMarket();
-          marketThreshold = Math.round(signal.priceUsd);
-          question = `Will BTC trade above $${marketThreshold.toLocaleString()} at resolution?`;
-        }
+      // Every market is an oracle market: a real event resolved from public
+      // data. A named question is resolved by the host, an unnamed one by the
+      // live price feed.
+      let question = String(body?.question ?? '').trim().slice(0, 140);
+      if (question) {
+        marketThreshold = null; // host resolves YES/NO manually
+      } else {
+        const signal = await observeMarket();
+        marketThreshold = Math.round(signal.priceUsd);
+        question = `Will BTC trade above $${marketThreshold.toLocaleString()} at resolution?`;
       }
-      runJob('game-new', isMarket ? 'Opening a sealed prediction market' : 'Opening a new Number Game', async () => {
-        const addr = await deployGame(gameProviders, question, isMarket ? 1 : 0);
+      runJob('game-new', 'Opening a sealed prediction market', async () => {
+        const addr = await deployGame(gameProviders, question, 1);
         recordGame(addr);
         gameAddress = addr;
         setActiveGame(addr);
         game = await connectGame(gameProviders, addr);
         housePlans.clear();
-        return `The Number Game is open. ${me.name} is the host — the house players are thinking.`;
+        return `The market is open. ${me.name} is the host — the desks are researching.`;
       });
       return { ok: true };
     }
@@ -623,9 +621,6 @@ async function apiAction(body: any): Promise<any> {
               outcome = signal.priceUsd > threshold ? 100n : 1n;
             }
             await game.callTx.resolveOutcome(outcome);
-          } else {
-            const target = twoThirdsMean(view.revealedSum, view.revealedCount);
-            await game.callTx.lockTarget(BigInt(target));
           }
         }
         const after = await readGameLedger(gameProviders, gameAddress);
@@ -642,7 +637,7 @@ async function apiAction(body: any): Promise<any> {
     case 'game-finalize': {
       runJob('game-finalize', 'Closing the game', async () => {
         await game.callTx.finalize();
-        return 'The Number Game is closed for the ages.';
+        return 'The market is settled. Losing forecasts stay sealed forever.';
       });
       return { ok: true };
     }
@@ -906,12 +901,11 @@ setInterval(() => {
   rivalTick().catch(() => {});
 }, 7_000);
 
-// ─── House players (Number Game) ───────────────────────────────────────────────
+// ─── Forecaster agents ────────────────────────────────────────────────────────
 //
-// Five players at explicit levels of reasoning — the point of the beauty
-// contest is that pure rationality loses to good psychology, so the house
-// embodies the whole spectrum. Guesses are theirs alone: sealed, then
-// revealed, through the same proof pipeline as everyone else.
+// Agents the user deploys research an event and seal an independent forecast.
+// Forecasts are theirs alone: sealed, then revealed, through the same proof
+// pipeline as everyone else.
 
 interface HousePlayer {
   prompt?: string;
@@ -1027,13 +1021,9 @@ async function autoDrive(): Promise<void> {
     runJob('game-reckon', 'Oracle resolving the event', async () => {
       const v2 = await readGameLedger(gameProviders, gameAddress);
       if (v2.phase === 'reveal') {
-        if (v2.mode === 'oracle') {
-          const signal = await observeMarket();
-          const threshold = marketThreshold ?? Math.round(signal.priceUsd);
-          await game.callTx.resolveOutcome(signal.priceUsd > threshold ? 100n : 1n);
-        } else {
-          await game.callTx.lockTarget(BigInt(twoThirdsMean(v2.revealedSum, v2.revealedCount)));
-        }
+        const signal = await observeMarket();
+        const threshold = marketThreshold ?? Math.round(signal.priceUsd);
+        await game.callTx.resolveOutcome(signal.priceUsd > threshold ? 100n : 1n);
       }
       const after = await readGameLedger(gameProviders, gameAddress);
       const best = [...after.guesses].sort((a, b) => Math.abs(a.guess - after.target) - Math.abs(b.guess - after.target))[0];
@@ -1334,8 +1324,8 @@ const server = http.createServer(async (req, res) => {
       }
       return send(res, 200, JSON.stringify(await apiAction(body)));
     }
-    // Static files — the prediction market is the front door.
-    let file = url.pathname === '/' ? '/game.html' : url.pathname;
+    // Static files — the two-feature landing page is the front door.
+    let file = url.pathname === '/' ? '/home.html' : url.pathname;
     const resolved = path.resolve(WEB_ROOT, `.${file}`);
     if (!resolved.startsWith(WEB_ROOT) || !fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
       return send(res, 404, 'Not found', 'text/plain');

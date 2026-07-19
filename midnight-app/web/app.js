@@ -227,6 +227,8 @@ async function poll(immediate = false) {
   try {
     state.status = await api('/api/status');
     render();
+    // First successful render — drop the skeleton shimmer.
+    document.body.classList.remove('is-loading');
   } catch {
     $('net-dot').className = 'net-dot err';
     $('net-label').textContent = 'server unreachable';

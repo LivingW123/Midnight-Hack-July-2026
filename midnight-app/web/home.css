@@ -1,0 +1,122 @@
+/* Sealed — home. Two features, one privacy primitive.
+   Page-scoped only; tokens, buttons and the masthead come from styles.css. */
+
+.home-main { max-width: 1040px; margin: 0 auto; padding: 0 var(--space-6) var(--space-10); }
+
+.home-hero { text-align: center; padding: var(--space-8) 0 var(--space-6); }
+.home-hero .lot-title { max-width: 24ch; }
+.home-lede {
+  max-width: 62ch;
+  margin: var(--space-5) auto 0;
+  color: var(--dusk-bright);
+  font-size: var(--text-lg);
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+.home-lede b { color: var(--moon); font-weight: 500; }
+
+/* ── The two features ─────────────────────────────────────── */
+
+.features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+  gap: var(--space-5);
+  margin-top: var(--space-8);
+}
+
+.feature {
+  display: flex;
+  flex-direction: column;
+  background: var(--night-raised);
+  border: 1px solid var(--night-line);
+  border-radius: 14px;
+  padding: var(--space-6);
+  transition: border-color 0.3s, transform 0.3s, box-shadow 0.3s;
+}
+.feature:hover {
+  transform: translateY(-3px);
+  border-color: var(--lamplight);
+  box-shadow: 0 14px 40px #00000055;
+}
+
+.feature-eyebrow {
+  font-size: var(--text-3xs);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--lamplight);
+}
+.feature h2 {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: var(--text-2xl);
+  line-height: 1.2;
+  margin: var(--space-3) 0 var(--space-2);
+}
+.feature-sub { color: var(--dusk-bright); font-size: var(--text-sm); line-height: 1.55; }
+
+/* What the chain never learns — the point of each feature, in one line. */
+.feature-private {
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-left: 2px solid var(--lamplight);
+  background: var(--lamplight-soft);
+  border-radius: 0 6px 6px 0;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--moon);
+}
+.feature-private b { color: var(--lamplight); font-weight: 500; }
+
+.feature-points { list-style: none; margin: var(--space-4) 0 0; }
+.feature-points li {
+  position: relative;
+  padding-left: var(--space-5);
+  margin-bottom: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--dusk-bright);
+  line-height: 1.5;
+}
+.feature-points li::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 7px;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--wax);
+}
+
+.feature-foot { margin-top: auto; padding-top: var(--space-5); }
+.feature-foot .btn { width: 100%; justify-content: center; text-align: center; text-decoration: none; display: block; }
+.feature-alt {
+  display: block;
+  margin-top: var(--space-3);
+  text-align: center;
+  font-size: var(--text-2xs);
+  color: var(--dusk);
+}
+.feature-alt a { color: var(--lamplight); text-decoration: none; }
+.feature-alt a:hover { text-decoration: underline; }
+
+/* ── Shared foundation strip ──────────────────────────────── */
+
+.foundation {
+  margin-top: var(--space-10);
+  padding-top: var(--space-6);
+  border-top: 1px dashed var(--night-line);
+  text-align: center;
+}
+.foundation p {
+  max-width: 68ch;
+  margin: var(--space-3) auto 0;
+  color: var(--dusk);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+}
+.foundation a { color: var(--lamplight); text-decoration: none; }
+.foundation a:hover { text-decoration: underline; }
+
+@media (max-width: 560px) {
+  .home-main { padding: 0 var(--space-4) var(--space-10); }
+  .features { grid-template-columns: 1fr; }
+  .feature { padding: var(--space-5); }
+}

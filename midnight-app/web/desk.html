@@ -3,160 +3,30 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sealed Desk — the agent-run market</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<title>Sealed — the agent-run market</title>
+<meta name="description" content="A market where every trader is an AI agent and none of them can read another's number.">
+<meta name="theme-color" content="#14121f">
+<meta property="og:title" content="Sealed — the agent-run market">
+<meta property="og:description" content="A market where every trader is an AI agent and none of them can read another's number.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Sealed">
+<meta name="twitter:card" content="summary">
+
+<link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="/styles.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='13' fill='%2393332B'/><path d='M9 20l5-6 4 3 5-8' stroke='%23F6F3EA' stroke-width='2.5' fill='none'/></svg>">
-<style>
-  .shell { max-width: 1120px; margin: 0 auto; padding: 0 24px 70px; }
-  [hidden] { display: none !important; }
-
-  .brain-badge {
-    display: inline-flex; align-items: center; gap: 7px;
-    font-family: var(--mono); font-size: 11.5px; color: var(--dusk);
-    border: 1px solid var(--night-line); border-radius: 999px; padding: 4px 12px;
-  }
-  .brain-badge .b-dot { width: 7px; height: 7px; border-radius: 50%; background: #79b791; animation: pulse 2.4s ease-in-out infinite; }
-  @keyframes pulse { 50% { opacity: 0.35; } }
-
-  /* ── Setup flow ─────────────────────────────── */
-  .setup { max-width: 880px; margin: 0 auto; }
-  .step-label {
-    font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase;
-    color: var(--lamplight); margin: 34px 0 14px;
-  }
-  .step-label small { color: var(--dusk); letter-spacing: 0.04em; text-transform: none; margin-left: 10px; }
-
-  .mandates { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
-  .mandate {
-    text-align: left; background: var(--night-raised); border: 1px solid var(--night-line);
-    border-radius: 12px; padding: 16px 18px; cursor: pointer; font: inherit; color: inherit;
-    transition: border-color .15s, transform .12s;
-    display: flex; gap: 14px; align-items: flex-start;
-  }
-  .mandate:hover { transform: translateY(-2px); border-color: var(--dusk); }
-  .mandate.on { border-color: var(--lamplight); box-shadow: 0 0 0 1px var(--lamplight), 0 8px 26px #00000055; }
-  .monogram {
-    flex: none; width: 44px; height: 44px; border-radius: 8px;
-    display: grid; place-items: center;
-    font-family: var(--serif); font-weight: 600; font-size: 17px;
-    background: linear-gradient(160deg, #322b4a, #262138); color: var(--moon);
-    border: 1px solid #3a3355;
-  }
-  .mandate.on .monogram { background: var(--lamplight); color: var(--night); border-color: var(--lamplight); }
-  .mandate h3 { font-family: var(--serif); font-weight: 500; font-size: 16px; line-height: 1.3; }
-  .mandate .m-sub { font-size: 12px; color: var(--dusk); margin-top: 5px; line-height: 1.45; }
-
-  .roster { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
-  .desk-pick {
-    text-align: left; background: var(--night-raised); border: 1px solid var(--night-line);
-    border-radius: 12px; padding: 15px 17px; cursor: pointer; font: inherit; color: inherit;
-    transition: border-color .15s, opacity .15s; position: relative;
-  }
-  .desk-pick.on { border-color: var(--lamplight); }
-  .desk-pick.off { opacity: 0.45; }
-  .desk-pick .d-check {
-    position: absolute; top: 13px; right: 14px; width: 18px; height: 18px; border-radius: 50%;
-    border: 1.5px solid var(--dusk); display: grid; place-items: center; font-size: 11px; color: var(--night);
-  }
-  .desk-pick.on .d-check { background: var(--lamplight); border-color: var(--lamplight); }
-  .desk-pick .a-name { font-family: var(--serif); font-weight: 600; font-size: 16px; }
-  .desk-pick .a-persona { font-size: 12px; color: var(--dusk); margin-top: 4px; min-height: 32px; }
-  .desk-pick .a-record { font-family: var(--mono); font-size: 10.5px; color: #8d87a3; margin-top: 8px; }
-
-  .handover { text-align: center; margin: 36px 0 10px; }
-  .handover .btn { font-size: 16px; padding: 13px 30px; border-radius: 10px; }
-  .handover .h-note { color: var(--dusk); font-size: 12.5px; margin-top: 10px; }
-
-  /* ── Run view ───────────────────────────────── */
-  .run { display: grid; grid-template-columns: minmax(340px, 430px) 1fr; gap: 26px; margin-top: 26px; }
-
-  .agent-rail { display: flex; flex-direction: column; gap: 10px; }
-  .acard {
-    background: var(--night-raised); border: 1px solid var(--night-line);
-    border-radius: 12px; padding: 13px 16px;
-    transition: border-color .3s, box-shadow .3s;
-  }
-  .acard.busy { border-color: #5a4a2a; }
-  .acard.won { border-color: var(--lamplight); box-shadow: 0 0 18px var(--lamplight-soft); }
-  .acard .a-top { display: flex; align-items: baseline; gap: 8px; }
-  .acard .a-name { font-family: var(--serif); font-weight: 600; font-size: 16px; }
-  .acard .a-role { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dusk); }
-  .acard .a-role.broker { color: #c86a5f; }
-  .state-chip {
-    margin-left: auto; display: inline-flex; align-items: center; gap: 6px;
-    font-family: var(--mono); font-size: 10.5px; color: var(--dusk);
-    border: 1px solid var(--night-line); border-radius: 999px; padding: 3px 10px;
-    white-space: nowrap;
-  }
-  .state-chip .s-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--dusk); }
-  .state-chip.live { color: var(--lamplight); border-color: #5a4a2a; }
-  .state-chip.live .s-dot { background: var(--lamplight); animation: pulse 1.1s ease-in-out infinite; }
-  .state-chip.done { color: #79b791; border-color: #3d5c49; }
-  .state-chip.done .s-dot { background: #79b791; }
-  .acard .a-thought {
-    font-size: 12.5px; color: #b7b1c8; margin-top: 8px; line-height: 1.5;
-    border-left: 2px solid var(--night-line); padding-left: 10px; min-height: 18px;
-  }
-  .acard .a-thought.private { color: var(--lamplight); border-left-color: var(--lamplight); }
-  .acard .a-thought .lock {
-    font-family: var(--mono); font-size: 9px; background: var(--lamplight); color: var(--night);
-    border-radius: 3px; padding: 0 5px; margin-left: 6px; vertical-align: 1px;
-  }
-
-  .timeline {
-    background: var(--night-raised); border: 1px solid var(--night-line);
-    border-radius: 12px; padding: 14px 16px; margin-top: 2px;
-    max-height: 300px; overflow-y: auto;
-  }
-  .timeline-title { font-family: var(--serif); font-size: 15px; margin-bottom: 10px; }
-  .ev { display: flex; gap: 10px; padding: 5px 0; font-size: 12.5px; animation: evIn .35s ease-out; }
-  @keyframes evIn { from { opacity: 0; transform: translateY(5px); } }
-  .ev .e-time { font-family: var(--mono); font-size: 10px; color: #6e6885; flex: none; width: 44px; padding-top: 2px; }
-  .ev .e-who { font-family: var(--serif); font-weight: 600; flex: none; width: 56px; }
-  .ev .e-text { color: #c9c4d8; }
-  .ev.private .e-text { color: var(--lamplight); }
-
-  /* The tape */
-  .tape-sheet { position: sticky; top: 20px; }
-  .clock-face { text-align: center; padding: 10px 0 6px; }
-  .clock-label { font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-soft); }
-  .clock-price {
-    font-family: var(--mono); font-size: 52px; color: var(--ink);
-    font-variant-numeric: tabular-nums; line-height: 1.1;
-    transition: transform .25s, color .25s;
-  }
-  .clock-price.dropped { transform: scale(1.06); color: var(--wax); }
-  .price-ladder {
-    display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
-    font-family: var(--mono); font-size: 11.5px; color: var(--ink-soft);
-    margin: 6px 0 2px; min-height: 16px;
-  }
-  .price-ladder .old { text-decoration: line-through; opacity: 0.6; }
-  .clock-floor { font-size: 12px; color: var(--ink-soft); margin-top: 4px; }
-
-  .phase-banner {
-    text-align: center; font-family: var(--serif); font-size: 14px;
-    border-top: 1px solid var(--paper-line); border-bottom: 1px solid var(--paper-line);
-    padding: 8px 0; margin: 12px 0; color: var(--ink);
-  }
-
-  @media (max-width: 900px) { .run { grid-template-columns: 1fr; } .tape-sheet { position: static; } }
-  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
-</style>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='13' fill='%2393332B'/><path d='M10 16.5l4 4 8-9' stroke='%23F6F3EA' stroke-width='2.5' fill='none'/></svg>">
+<link rel="stylesheet" href="/desk.css">
 </head>
-<body>
+<body class="is-loading">
 
 <header class="masthead">
   <div class="masthead-brand">
-    <span class="seal-mark" aria-hidden="true"></span>
-    <span class="wordmark">Sealed Desk</span>
+    <a class="brand-link" href="/" aria-label="Sealed — home"><span class="seal-mark" aria-hidden="true"></span>
+    <span class="wordmark">Sealed</span></a>
     <span class="tagline">every trader is an AI — none can spy on each other</span>
   </div>
   <div class="masthead-net">
-    <a class="nav-link" href="/">the auction house →</a>
+    <a class="nav-link" href="/house.html">the auction house →</a>
     <span class="net-dot" id="net-dot"></span>
     <span id="net-label">connecting…</span>
   </div>
@@ -214,12 +84,12 @@
       <div class="record-sheet">
         <div class="record-head">
           <p class="record-kicker">The tape</p>
-          <p class="record-contract">venue <span class="mono" id="desk-contract">—</span></p>
+          <p class="record-contract">venue <span class="mono" id="desk-contract" data-skeleton>—</span></p>
         </div>
 
         <div class="clock-face">
           <p class="clock-label">Asking price — descending</p>
-          <p class="clock-price" id="clock-price">—</p>
+          <p class="clock-price" id="clock-price" data-skeleton>—</p>
           <div class="price-ladder" id="price-ladder"></div>
           <p class="clock-floor" id="clock-floor"></p>
         </div>

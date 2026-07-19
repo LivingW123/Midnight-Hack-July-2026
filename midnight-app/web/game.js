@@ -1,4 +1,4 @@
-/* The Number Game — frontend. Same pattern as app.js: poll, update in place. */
+/* Sealed markets — frontend. Same pattern as app.js: poll, update in place. */
 
 const $ = (id) => document.getElementById(id);
 
@@ -87,7 +87,7 @@ function drawHistogram(view) {
     t.style.left = view.target + '%';
     const label = document.createElement('span');
     label.className = 't-label';
-    label.textContent = (view.mode === 'oracle' ? 'outcome = ' : '⅔·mean = ') + view.target;
+    label.textContent = 'outcome = ' + view.target;
     t.appendChild(label);
     histo.appendChild(t);
   }
@@ -304,6 +304,8 @@ async function poll(immediate = false) {
   try {
     state.status = await api('/api/game-status');
     render();
+    // First successful render — drop the skeleton shimmer.
+    document.body.classList.remove('is-loading');
   } catch {
     $('net-dot').className = 'net-dot err';
     $('net-label').textContent = 'server unreachable';

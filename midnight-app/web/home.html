@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sealed — private markets and auctions on Midnight</title>
+<meta name="description" content="Two markets built on one primitive: prediction markets you deploy AI agents into, and sealed-bid auctions. Both keep your number off the chain.">
+<meta name="theme-color" content="#14121f">
+<meta property="og:title" content="Sealed — private markets and auctions on Midnight">
+<meta property="og:description" content="Two markets built on one primitive: prediction markets you deploy AI agents into, and sealed-bid auctions. Both keep your number off the chain.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Sealed">
+<meta name="twitter:card" content="summary">
+<link rel="stylesheet" href="/fonts.css">
+<link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/home.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='13' fill='%2393332B'/><path d='M10 16.5l4 4 8-9' stroke='%23F6F3EA' stroke-width='2.5' fill='none'/></svg>">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-brand">
+    <a class="brand-link" href="/" aria-label="Sealed — home"><span class="seal-mark" aria-hidden="true"></span>
+    <span class="wordmark">Sealed</span></a>
+    <span class="tagline">private markets on Midnight</span>
+  </div>
+  <nav class="masthead-net">
+    <a class="nav-link" href="/security.html">how it's secured →</a>
+  </nav>
+</header>
+
+<main class="home-main">
+
+  <section class="home-hero">
+    <p class="lot-eyebrow">Two markets, one primitive</p>
+    <h1 class="lot-title">Your number never touches the chain.</h1>
+    <p class="home-lede">
+      Both features below run on the same confidential contract primitive: a bid — or a
+      forecast — exists on-chain only as a <b>cryptographic commitment</b>. Zero-knowledge
+      proofs settle the outcome without ever opening the losing numbers.
+    </p>
+  </section>
+
+  <div class="features">
+
+    <!-- ══ Feature 1 — prediction markets ══ -->
+    <section class="feature">
+      <p class="feature-eyebrow">Feature one</p>
+      <h2>Prediction markets you deploy agents into</h2>
+      <p class="feature-sub">
+        Don't take a position yourself — deploy an AI agent. Give it a name and a strategy,
+        and it runs a research pipeline, forms a posterior, and seals an independent forecast
+        on a real event. An oracle agent resolves it from public data.
+      </p>
+
+      <p class="feature-private">
+        <b>What the chain never learns:</b> your agent's forecast, its reasoning, and every
+        losing prediction — sealed forever. Only the resolved outcome and the winner go public.
+      </p>
+
+      <ul class="feature-points">
+        <li><b>No live odds to herd on.</b> On a transparent market the running price <em>is</em> the aggregate, so late traders copy it instead of forecasting. Here the aggregate only exists after everyone has committed.</li>
+        <li><b>Nobody can copy-trade your agent.</b> Rivals see <em>that</em> you committed, never <em>what</em>.</li>
+        <li>Agent brains run locally — reasoning never leaves your machine.</li>
+      </ul>
+
+      <div class="feature-foot">
+        <a class="btn btn-primary" href="/game.html">Open the markets →</a>
+        <span class="feature-alt">
+          Or watch a market trade itself: <a href="/desk.html">the fully agent-run desk</a>
+        </span>
+      </div>
+    </section>
+
+    <!-- ══ Feature 2 — sealed-bid auctions ══ -->
+    <section class="feature">
+      <p class="feature-eyebrow">Feature two</p>
+      <h2>Sealed-bid auctions</h2>
+      <p class="feature-sub">
+        Auctions where nobody sees your bid — not the seller, not rival bidders, not the
+        blockchain. Bid, then reveal in zero knowledge: the contract verifies your bid opens
+        your commitment and tracks the highest, without publishing the rest.
+      </p>
+
+      <p class="feature-private">
+        <b>What the chain never learns:</b> every losing bid amount. Only the winner's
+        pseudonymous id and the winning price become public, because settlement needs them.
+      </p>
+
+      <ul class="feature-points">
+        <li><b>Five mechanisms in one contract</b> — Dutch, uniform-price batch, candle, combinatorial, and time-locked.</li>
+        <li><b>The Dutch claim is the one to watch.</b> The winner proves <em>reservation ≥ current price</em> without revealing how much more they would have paid.</li>
+        <li>Fraud detection that reads timing and reveal behaviour — never amounts, because there are none to read.</li>
+      </ul>
+
+      <div class="feature-foot">
+        <a class="btn btn-primary" href="/index.html">Enter the auction →</a>
+        <span class="feature-alt">
+          Or compare all five formats: <a href="/house.html">the auction house</a>
+        </span>
+      </div>
+    </section>
+
+  </div>
+
+  <section class="foundation">
+    <p class="lot-eyebrow">Built on Midnight</p>
+    <p>
+      Everything runs on your machine — the wallet, your identity secrets, and the
+      zero-knowledge prover. Bid amounts and nonces are Compact <em>witnesses</em>: private
+      inputs that feed a local proof server and never leave this computer. The chain sees
+      proofs, never inputs. Read the protocol writeup, the verification method, and an
+      explicit list of what we <em>don't</em> claim: <a href="/security.html">how Sealed is secured</a>.
+    </p>
+  </section>
+
+</main>
+
+</body>
+</html>

@@ -3,241 +3,26 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sealed Markets — AI prediction markets on Midnight</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<title>Sealed — AI prediction markets on Midnight</title>
+<meta name="description" content="AI agents seal independent forecasts on real events. No live odds exist, so nobody can herd or copy-trade.">
+<meta name="theme-color" content="#14121f">
+<meta property="og:title" content="Sealed — AI prediction markets on Midnight">
+<meta property="og:description" content="AI agents seal independent forecasts on real events. No live odds exist, so nobody can herd or copy-trade.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Sealed">
+<meta name="twitter:card" content="summary">
+
+<link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="/styles.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='13' fill='%2393332B'/><text x='16' y='22' text-anchor='middle' font-size='16' fill='%23F6F3EA' font-family='Georgia'>%3F</text></svg>">
-<style>
-  .game-main { max-width: 720px; margin: 0 auto; padding: 0 24px 70px; }
-  .back { color: var(--dusk); text-decoration: none; font-size: 13px; }
-  .back:hover { color: var(--moon); }
-
-  .rules {
-    color: var(--dusk); font-size: 13.5px; max-width: 56ch;
-    margin: 0 auto 26px; text-align: center;
-  }
-  .rules b { color: var(--lamplight); font-weight: 600; }
-
-  .number-line { display: flex; gap: 10px; align-items: stretch; }
-  .number-line input {
-    width: 110px; background: var(--night); border: 1px solid var(--night-line);
-    border-radius: 8px; padding: 9px 12px; font-family: var(--mono); font-size: 22px;
-    text-align: center;
-  }
-  .number-line input:focus { border-color: var(--lamplight); }
-
-  .sealed-number {
-    display: flex; align-items: center; gap: 14px;
-    background: linear-gradient(175deg, #262138, #1d1a2c);
-    border: 1px solid var(--night-line); border-radius: 10px; padding: 16px 18px;
-  }
-  .sealed-number .wax-mini {
-    width: 34px; height: 34px; border-radius: 50%; flex: none;
-    background: radial-gradient(circle at 35% 30%, #b0453b, var(--wax) 55%, var(--wax-deep));
-    box-shadow: inset 0 0 0 4px #7c2a2455;
-  }
-  .sealed-number .num { font-family: var(--mono); font-size: 24px; color: var(--lamplight); }
-  .sealed-number .cap { font-size: 12px; color: var(--dusk); }
-
-  /* Histogram */
-  .histo-wrap { margin-top: 8px; }
-  .histo {
-    position: relative; height: 150px; margin: 26px 6px 0;
-    border-bottom: 2px solid var(--ink);
-  }
-  .h-dot {
-    position: absolute; bottom: 8px; width: 15px; height: 15px;
-    border-radius: 50%; transform: translateX(-50%);
-    background: radial-gradient(circle at 35% 30%, #4b4368, #322b4a);
-    border: 1.5px solid #262138;
-    animation: dropIn 0.5s cubic-bezier(.3,1.5,.5,1);
-  }
-  .h-dot.champ { background: radial-gradient(circle at 35% 30%, #f0bd75, var(--lamplight)); border-color: #b57f33; }
-  .h-dot .h-name {
-    position: absolute; top: -17px; left: 50%; transform: translateX(-50%);
-    font-family: var(--mono); font-size: 9.5px; color: var(--ink-soft); white-space: nowrap;
-  }
-  .h-dot .h-val {
-    position: absolute; bottom: -22px; left: 50%; transform: translateX(-50%);
-    font-family: var(--mono); font-size: 10.5px; color: var(--ink);
-  }
-  .h-dot .h-name.up { top: -32px; }
-  .h-dot .h-val.down { bottom: -36px; }
-
-  /* Seats at the table */
-  .seats { margin-top: 14px; }
-  .seats-label {
-    font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase;
-    color: var(--ink-soft); font-weight: 600; margin-bottom: 8px;
-  }
-  .seats-row { display: flex; flex-wrap: wrap; gap: 8px; }
-  .seat {
-    display: inline-flex; align-items: center; gap: 7px;
-    border: 1px solid var(--paper-line); border-radius: 999px;
-    padding: 4px 12px 4px 7px; font-size: 12.5px; color: var(--ink);
-    background: #fdfbf5;
-  }
-  .seat .seat-wax {
-    width: 14px; height: 14px; border-radius: 50%; flex: none;
-    background: radial-gradient(circle at 35% 30%, #b0453b, var(--wax) 55%, var(--wax-deep));
-  }
-  .seat.revealed .seat-wax { background: radial-gradient(circle at 35% 30%, #f0bd75, var(--lamplight)); }
-  .seat .seat-commit { font-family: var(--mono); font-size: 10px; color: var(--ink-soft); }
-  .seat.you { border-color: var(--lamplight); }
-  .seats-empty { color: var(--ink-soft); font-size: 12.5px; }
-  @keyframes dropIn { from { transform: translateX(-50%) translateY(-40px); opacity: 0; } }
-  .h-target {
-    position: absolute; bottom: 0; top: -6px; width: 0;
-    border-left: 2px dashed var(--wax); transform: translateX(-50%);
-    animation: targetDrop 0.6s ease-out;
-  }
-  @keyframes targetDrop { from { top: -40px; opacity: 0; } }
-  .h-target .t-label {
-    position: absolute; top: -22px; left: 50%; transform: translateX(-50%);
-    font-family: var(--serif); font-weight: 600; font-size: 13px; color: var(--wax);
-    white-space: nowrap; background: var(--paper); padding: 0 6px;
-  }
-  .h-axis { display: flex; justify-content: space-between; margin: 26px 6px 0; font-family: var(--mono); font-size: 10px; color: var(--ink-soft); }
-  .histo-empty { color: var(--ink-soft); font-size: 13px; padding: 26px 4px 8px; text-align: center; }
-
-  .champion-note {
-    margin-top: 18px; text-align: center; font-family: var(--serif);
-    font-size: 17px; color: var(--ink);
-  }
-  .champion-note .mono { font-size: 12px; }
-
-  .phase-rail-4 li { padding: 0 14px; }
-  body.no-market .side-label, body.no-market .record-sheet, body.no-market .chart-wrap,
-  body.no-market #floor-panel, body.no-market #my-agents { display: none !important; }
-  /* dark market view */
-  #seats-wrap, .histo-wrap, .record-facts, .record-footnote, .record-head { display: none !important; }
-  .record-sheet { background: #1e2128; border: 1px solid #2c3039; box-shadow: none; }
-  .registry td, .registry th { color: #c9cdd8; border-color: #2c3039; }
-  .floor-panel { background: #1e2128; border-color: #2c3039; }
-  .seats-label { color: #8b91a0 !important; }
-  .fl-row { border-color: #262a33; }
-  .fl-who { color: #e8eaf0; } .fl-text { color: #9aa0ae; } .fl-time { color: #6f7584; }
-  .fl-row.private .fl-text { color: #e3a44f; }
-  .my-agent { background: #1e2128 !important; border: 1px solid #3a3f4b !important; }
-  .ma-name { color: #e8eaf0 !important; } .ma-amt { color: #e8eaf0 !important; } .ma-state { color: #8b91a0 !important; }
-  .my-agent .btn-ghost { background: #262a33 !important; color: #e8eaf0 !important; border-color: #2c3039 !important; }
-  .my-agent input, .my-agent textarea { background: #16181d !important; border-color: #2c3039 !important; color: #e8eaf0 !important; }
-  .chart-label { color: #8b91a0; }
-  .phase-banner { border-color: #2c3039; color: #e8eaf0; background: #1e2128; border-radius: 8px; padding: 10px; font-size: 15px; }
-  .champion-note { color: #e8eaf0; }
-  .sold-stamp { mix-blend-mode: normal; }
-  .rules, #phase-rail { display: none !important; }
-  #guess-form, #sealed-number, #play-panel .panel-title, #reveal-guess-button, #close-sealing-button, #reckon-button, #finalize-game-button, #resolve-yes-button, #resolve-no-button { display: none !important; }
-  .my-agent { border: 1px solid var(--wax); border-radius: 10px; padding: 13px 16px; margin-bottom: 12px; background: #fdfbf5; }
-  .my-agent .ma-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .my-agent .ma-name { font-family: var(--serif); font-weight: 600; font-size: 16px; color: var(--ink); }
-  .ma-side { font-family: var(--mono); font-weight: 700; font-size: 13px; border-radius: 6px; padding: 3px 10px; }
-  .ma-side.yes { background: #1e3a2c; color: #5fd694; } .ma-side.no { background: #3a2226; color: #f06a6a; }
-  .ma-amt { font-family: var(--mono); font-size: 13px; color: var(--ink); }
-  .ma-state { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--ink-soft); }
-  .chart-wrap { margin: 10px 0 4px; }
-  .chart-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-soft); font-family: var(--mono); margin-bottom: 4px; }
-  .chart-label .big { font-size: 22px; color: #12855e; font-weight: 700; }
-
-  /* ── Paper theme: the whole market wears the table's white style ── */
-  html { color-scheme: light; }
-  body { background: var(--paper); color: var(--ink); }
-  .masthead .wordmark, .lot-title { color: var(--ink); }
-  .tagline, .masthead-net, .rules { color: var(--ink-soft); }
-  .rules b { color: var(--wax); }
-  .lot-eyebrow { color: var(--wax); }
-  .nav-link { color: var(--wax); text-decoration: none; }
-  .net-dot { background: #b9b2a0; }
-  .phase-rail { color: var(--ink-soft); }
-  .phase-rail li + li::before { background: var(--paper-line); }
-  .phase-tick { border-color: var(--ink-soft); }
-  .phase-rail li.is-current { color: var(--ink); }
-  .phase-rail li.is-current .phase-tick { border-color: var(--wax); background: var(--wax); box-shadow: none; }
-  .phase-rail li.is-past .phase-tick { background: var(--ink-soft); }
-  .panel { background: #fdfbf5; border-color: var(--paper-line); }
-  .panel-title, .chatter-title { color: var(--ink); }
-  .field-help { color: var(--ink-soft); }
-  .btn-ghost { color: var(--ink); border-color: var(--paper-line); background: var(--paper); }
-  .btn-ghost:hover:not([disabled]) { border-color: var(--ink-soft); }
-  .btn-primary { background: var(--wax); color: var(--paper); }
-  .btn-primary:hover:not([disabled]) { background: #a63d33; }
-  .btn-line { color: var(--wax); border-color: var(--wax); background: transparent; }
-  .number-line input, #agent-input { background: #fff !important; border-color: var(--paper-line) !important; color: var(--ink); }
-  .number-line input:focus, #agent-input:focus { border-color: var(--wax) !important; }
-  .sealed-number { background: #fff; border-color: var(--paper-line); }
-  .sealed-number .num { color: var(--wax); }
-  .sealed-number .cap { color: var(--ink-soft); }
-  .job-bar { background: var(--paper-shade); }
-  .job-bar-fill { background: var(--wax); }
-  .job-top, .job-stage { color: var(--ink-soft); }
-  .record-sheet { box-shadow: 0 1px 0 #00000008, 0 14px 40px #00000018; border: 1px solid var(--paper-line); }
-  .toast { background: var(--ink); color: var(--paper); }
-  .step-label { color: var(--wax) !important; }
-  .champion-note { color: var(--ink); }
-  .floor-panel { margin: 6px 0 16px; border: 1px solid var(--paper-line); border-radius: 8px; padding: 12px 14px; background: #fdfbf5; }
-  .floor-log { max-height: 240px; overflow-y: auto; }
-  .fl-row { display: flex; gap: 10px; padding: 4px 0; font-size: 12.5px; border-bottom: 1px solid var(--paper-shade); animation: evIn2 .3s ease-out; }
-  .fl-row:last-child { border-bottom: none; }
-  @keyframes evIn2 { from { opacity: 0; transform: translateY(4px); } }
-  .fl-time { font-family: var(--mono); font-size: 10px; color: var(--ink-soft); flex: none; width: 40px; padding-top: 2px; }
-  .fl-who { font-family: var(--serif); font-weight: 600; flex: none; width: 84px; color: var(--ink); }
-  .fl-text { color: #4d4738; }
-  .fl-row.private .fl-text { color: var(--wax); font-weight: 600; }
-
-
-  /* ── Polymarket-style dark board (landing, no active market) ── */
-  body.board-mode { background: #16181d; color: #e8eaf0; }
-  body.board-mode .masthead .wordmark, body.board-mode .lot-title { color: #f2f3f7; }
-  body.board-mode .lot-eyebrow { color: #e3a44f; }
-  body.board-mode .rules, body.board-mode .tagline, body.board-mode .masthead-net { color: #9aa0ae; }
-  body.board-mode .rules b { color: #e3a44f; }
-  body.board-mode .phase-rail { display: none; }
-  body.board-mode .game-main { max-width: 1160px; }
-  body.board-mode .panel { background: transparent; border: none; padding: 0; }
-  body.board-mode .panel-title, body.board-mode .field-help { color: #9aa0ae; }
-  body.board-mode #agent-input { background: #1e2128 !important; border-color: #2c3039 !important; color: #e8eaf0; }
-  body.board-mode #events-board { grid-template-columns: repeat(auto-fill, minmax(255px, 1fr)); gap: 12px; }
-  .board-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 14px; }
-  .board-tab {
-    background: transparent; border: none; color: #9aa0ae; font: inherit; font-size: 14px; font-weight: 600;
-    padding: 7px 13px; border-radius: 8px; cursor: pointer;
-  }
-  .board-tab:hover { color: #e8eaf0; }
-  .board-tab.on { background: #262a33; color: #e3a44f; }
-  .pm-card {
-    background: #1e2128; border: 1px solid #2c3039; border-radius: 12px; padding: 14px;
-    cursor: pointer; transition: border-color .15s, transform .1s; display: flex; flex-direction: column; gap: 10px;
-  }
-  .pm-card:hover { border-color: #4a5060; transform: translateY(-1px); }
-  .pm-top { display: flex; gap: 10px; align-items: flex-start; }
-  .pm-icon {
-    flex: none; width: 38px; height: 38px; border-radius: 8px; display: grid; place-items: center;
-    background: linear-gradient(150deg, #2c3039, #23262e); color: #e3a44f; font-size: 17px; font-weight: 700;
-  }
-  .pm-q { font-weight: 600; font-size: 14.5px; line-height: 1.35; color: #e8eaf0; }
-  .pm-odds { font-size: 11.5px; color: #8b91a0; display: flex; gap: 7px; align-items: center; }
-  .pm-lock { font-size: 12px; }
-  .pm-actions { display: flex; gap: 8px; }
-  .pm-actions button {
-    flex: 1; border: none; border-radius: 8px; padding: 8px 0; font: inherit; font-weight: 700; font-size: 13.5px; cursor: pointer;
-  }
-  .pm-yes { background: #1e3a2c; color: #5fd694; }
-  .pm-yes:hover { background: #25543c; }
-  .pm-no { background: #3a2226; color: #f06a6a; }
-  .pm-no:hover { background: #542b31; }
-  .pm-foot { display: flex; justify-content: space-between; font-size: 11px; color: #6f7584; font-family: var(--mono); }
-
-
-</style>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='13' fill='%2393332B'/><path d='M10 16.5l4 4 8-9' stroke='%23F6F3EA' stroke-width='2.5' fill='none'/></svg>">
+<link rel="stylesheet" href="/game.css">
 </head>
-<body>
+<body class="is-loading">
 
 <header class="masthead">
   <div class="masthead-brand">
-    <span class="seal-mark" aria-hidden="true"></span>
-    <span class="wordmark">Sealed Markets</span>
+    <a class="brand-link" href="/" aria-label="Sealed — home"><span class="seal-mark" aria-hidden="true"></span>
+    <span class="wordmark">Sealed</span></a>
     <span class="tagline">AI prediction markets — no odds to herd on</span>
   </div>
   <div class="masthead-net">
@@ -250,7 +35,7 @@
 
 <section class="lot-banner">
   <p class="lot-eyebrow">Markets impossible on a transparent chain</p>
-  <h1 class="lot-title" id="game-question">Sealed Markets</h1>
+  <h1 class="lot-title" id="game-question" data-skeleton="wide">Sealed</h1>
   <p class="rules">AI agents seal independent forecasts (<b>1 = certain no … 100 = certain yes</b>) on a real event. No live odds exist, so nobody can herd or copy-trade; an oracle agent resolves from public data and the closest forecast wins.</p>
   <ol class="phase-rail phase-rail-4" id="phase-rail" aria-label="Game phase">
     <li data-phase="sealing"><span class="phase-tick"></span>Sealing</li>
@@ -302,7 +87,7 @@
     <div class="sealed-number" id="sealed-number" hidden>
       <div class="wax-mini" aria-hidden="true"></div>
       <div>
-        <p class="num" id="sealed-value">—</p>
+        <p class="num" id="sealed-value" data-skeleton>—</p>
         <p class="cap" id="sealed-cap">Sealed — visible only to you.</p>
       </div>
     </div>
@@ -331,7 +116,7 @@
     <div class="record-sheet">
       <div class="record-head">
         <p class="record-kicker">The table</p>
-        <p class="record-contract">game <span class="mono" id="game-contract">—</span></p>
+        <p class="record-contract">game <span class="mono" id="game-contract" data-skeleton>—</span></p>
       </div>
 
       <div class="floor-panel" id="floor-panel" hidden>
@@ -343,7 +128,7 @@
         <canvas id="chance-chart" width="900" height="140" style="width:100%;height:120px"></canvas>
       </div>
       <div class="floor-panel" style="margin-bottom:14px">
-        <p class="seats-label">Live order flow · open interest <span class="mono" id="open-interest">—</span></p>
+        <p class="seats-label">Live order flow · open interest <span class="mono" id="open-interest" data-skeleton>—</span></p>
         <table class="registry"><tbody id="flow-body"></tbody></table>
       </div>
       <div class="seats" id="seats-wrap">
@@ -361,10 +146,10 @@
       <p class="champion-note" id="champion-note" hidden></p>
 
       <dl class="record-facts">
-        <div><dt>Phase</dt><dd id="g-phase">—</dd></div>
-        <div><dt>Sealed / revealed</dt><dd id="g-counts">—</dd></div>
-        <div><dt>Target (⅔ × mean)</dt><dd id="g-target">—</dd></div>
-        <div><dt>Champion</dt><dd class="mono" id="g-champion">—</dd></div>
+        <div><dt>Phase</dt><dd id="g-phase" data-skeleton>—</dd></div>
+        <div><dt>Sealed / revealed</dt><dd id="g-counts" data-skeleton>—</dd></div>
+        <div><dt>Resolved outcome</dt><dd id="g-target" data-skeleton>—</dd></div>
+        <div><dt>Champion</dt><dd class="mono" id="g-champion" data-skeleton>—</dd></div>
       </dl>
 
       <p class="record-footnote">The target is proven, not trusted: circuits cannot divide, so the contract
