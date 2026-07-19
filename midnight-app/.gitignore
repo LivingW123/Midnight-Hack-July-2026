@@ -64,3 +64,5 @@ midnight-level-db/
 # Auction house deploy records + observed public bid metadata (per-machine)
 .sealed-house.json
 .sealed-intel.json
+.sealed-agents.json
+.sealed-research.json
