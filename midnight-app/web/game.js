@@ -135,7 +135,7 @@ function render() {
   $('game-question').textContent = '“' + v.question + '”';
   $('back-to-markets').hidden = false;
   $('game-contract').textContent = short(s.gameAddress, 10);
-  $('play-as').textContent = '— playing as ' + s.identity.name;
+  $('play-as').textContent = '— host: ' + s.identity.name;
 
   document.querySelectorAll('#phase-rail li').forEach((li) => {
     const order = { sealing: 0, reveal: 1, reckoning: 2, closed: 3 };

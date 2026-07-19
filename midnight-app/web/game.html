@@ -109,6 +109,7 @@
   .champion-note .mono { font-size: 12px; }
 
   .phase-rail-4 li { padding: 0 14px; }
+  #guess-form, #sealed-number { display: none !important; }
 
   /* ── Paper theme: the whole market wears the table's white style ── */
   html { color-scheme: light; }
@@ -256,7 +257,7 @@
   </template>
 
   <div class="panel" id="play-panel" hidden>
-    <h2 class="panel-title">Your number <span id="play-as" style="color:var(--dusk);font-family:var(--sans);font-size:12.5px;font-weight:400"></span></h2>
+    <h2 class="panel-title">Market controls <span id="play-as" style="color:var(--dusk);font-family:var(--sans);font-size:12.5px;font-weight:400"></span></h2>
 
     <form id="guess-form" autocomplete="off">
       <div class="number-line">
