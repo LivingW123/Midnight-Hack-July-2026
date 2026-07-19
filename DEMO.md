@@ -61,6 +61,44 @@ recording has real competition. Wait for their toasts ("Rival paddle vesper
 sealed a bid…") and point at the registry filling up. You may win or lose the
 lot depending on their random amounts — either ending demos the privacy story.
 
+## Alternate 2-minute cut: the Dutch auction
+
+If you'd rather lead with the strongest cryptographic claim than with the split
+screen, record this instead. It needs one deploy and two proofs, so it cuts
+tighter.
+
+```bash
+npm run web    # → http://localhost:4600/house.html
+```
+
+**0:10 — The format rack**
+> "Five auction mechanisms, one contract. What separates them isn't the code —
+> it's what each circuit can prove about a sealed bid *without opening it*."
+
+**0:25 — Open a Dutch auction** (opening 1000, floor 200, step 100)
+> "A Dutch auction descends in public. I seal the highest price I'd pay —
+> seven thousand — and that number never leaves this machine."
+
+**0:45 — Step the clock down twice**, pointing at the price tick
+> "The clock is public. My demand is not. Nobody can see there's a bidder here
+> willing to pay seven thousand."
+
+**1:05 — Claim at 800**
+> "Now I claim. The circuit proves my sealed reservation is *at least* eight
+> hundred — and that's all it proves. There is no `disclose` on my bid amount
+> anywhere in this circuit."
+
+**1:25 — The public record**
+> "I won at eight hundred, the public clock price. The chain learned exactly one
+> bit: someone would pay this much. It never learned I'd have paid seven
+> thousand — so the seller can't price-discriminate against me next time. On a
+> transparent chain that number is public forever."
+
+**1:45 — Close on /security.html**
+> "Every claim here points at the line of code enforcing it — including the
+> limits. `npm run test:house` proves the reservation price is absent from chain
+> state, even after winning."
+
 ## Timing tips
 
 - Proof generation is 30–60s per action: record everything, then cut the waits.

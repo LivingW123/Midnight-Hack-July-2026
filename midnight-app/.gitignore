@@ -61,3 +61,6 @@ temp/
 .sealed-identities.json
 midnight-level-db/
 .sealed-game.json
+# Auction house deploy records + observed public bid metadata (per-machine)
+.sealed-house.json
+.sealed-intel.json

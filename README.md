@@ -8,6 +8,53 @@ Built at the **Midnight Hackathon (July 2026)** — DeFi track.
 
 Sealed runs first-price sealed-bid auctions as a confidential smart contract on [Midnight](https://midnight.network). Bidders submit bids that exist on-chain only as cryptographic commitments — hiding the amount, binding the bidder to it. After bidding closes, each bidder reveals *in zero knowledge*: the contract verifies their bid opens their commitment and tracks the highest, but **losing bid amounts never touch the public ledger — ever**. Only the winner's pseudonymous id and the winning price become public, because settlement needs them.
 
+## Five mechanisms, one privacy guarantee
+
+The first-price auction above is the baseline. [`auction-house.compact`](midnight-app/contracts/auction-house.compact)
+adds four more mechanisms in a single contract — because what separates them is
+not the codebase, it's **what each circuit proves about a commitment without
+opening it**.
+
+| Format | The mechanism | What stays private that a transparent chain would leak |
+| --- | --- | --- |
+| **Dutch** | Price descends in public; bidders seal a reservation price and claim when the clock reaches it | The winner proves `reservation ≥ currentPrice` in zero knowledge. **Even on winning**, how much more they would have paid never reaches the chain — so the seller cannot price-discriminate against them next time |
+| **Uniform-price batch** | Up to 3 units clear at a single price: the lowest winning bid | Only bids landing in a winning slot are opened; the rest fall off the ladder unrevealed. Uniform pricing also kills the gas war — sniping buys you nothing |
+| **Candle** | Seller commits a secret end-index *before* bidding opens; later bids never counted | The end-index is binding from the first block, so the seller physically cannot move the close to exclude a bid they dislike |
+| **Combinatorial** | Bids on bundles of 3 lots (bitmask 1–7) | `lockAllocation` enumerates all five partitions of {A,B,C} **in-circuit** and takes the max — the allocation is *proven* revenue-optimal, not asserted by the seller |
+| **Time-locked** | Commit now, reveal later; reveals shut until a committed unlock tick passes | Nobody, including the seller, can open the field early |
+
+The Dutch claim is the one to watch in a demo. `claimAtCurrentPrice` contains no
+`disclose()` on the bid amount anywhere — the chain learns the single bit it
+needed ("someone will pay at least this") and nothing more. The e2e suite
+asserts the reservation price is absent from indexer-visible state both before
+the claim and after winning.
+
+```bash
+npm run test:house        # all four; or: npm run test:house -- dutch
+```
+
+## Auction intelligence — fraud detection that can't become a back door
+
+Two engines run over the house, both under a hard constraint: **bid values are
+private, so the usual inputs don't exist for anyone, including us.**
+
+- **Shill radar** scores arrival timing, reveal behaviour and cross-auction
+  overlap — never amounts. The strongest available signal turns out to survive
+  privacy intact: an account that repeatedly seals bids and *never opens them*
+  is driving activity without intending to buy. Signals are named and evidenced;
+  weights are set so no single signal can reach the `suspect` band alone.
+- **Dynamic reserve** recommends hold / lower / raise from demand *velocity* plus
+  comparable settlements. Arrival rate is a better demand proxy than bid size
+  anyway — one bidder typing a large number can't move it.
+
+A fraud system that needs plaintext bids becomes a surveillance tool the moment
+it's compromised. This one has nothing extra to leak: its input is public by
+construction, and the `BidEvent` type carries no amount field at all.
+
+These are explainable statistical detectors, **not** learned models — every score
+decomposes into named signals you can argue with. `npm run test:intel` covers the
+false-positive cases as heavily as the true ones.
+
 ## Why privacy needs this
 
 On a transparent chain, every auction leaks everything: bots front-run your bid the moment it hits the mempool, competitors read your exact valuation off the ledger, and your entire bidding history is public forever. That kills real use cases — procurement tenders, OTC block trades, NFT drops, ad slots — where the bid *is* the strategy. Sealed gives you the outcome transparency an auction needs (verifiable winner, provable rules) with the input privacy it deserves (bids stay sealed), enforced by zero-knowledge proofs rather than by trusting an auctioneer.
@@ -126,17 +173,49 @@ Deploys a fresh auction and runs the full lifecycle with three bidders (reveals 
 | Piece | File | Role |
 | --- | --- | --- |
 | Contract | `midnight-app/contracts/sealed-auction.compact` | phases, commitments, ZK reveal logic |
+| Auction house | `midnight-app/contracts/auction-house.compact` | five mechanisms, 11 circuits, one commitment scheme |
+| Number game | `midnight-app/contracts/number-game.compact` | sealed beauty contest, verified-quotient target |
 | Auction API | `midnight-app/src/auction-api.ts` | witness binding, providers, deploy/connect, typed ledger reader |
-| Identities | `midnight-app/src/identities.ts` | local secrets: per-identity keys + sealed bids (never leave the machine) |
+| House API | `midnight-app/src/house-api.ts` | same, for the multi-format contract |
+| Intelligence | `midnight-app/src/intel.ts` | shill detection + reserve advice, metadata only |
+| Identities | `midnight-app/src/identities.ts` | local secrets: per-identity keys, sealed bids, schedule secrets |
+| Web UI | `midnight-app/src/web-server.ts`, `web/` | split-screen privacy view, five formats, intel sheet |
 | CLI | `midnight-app/src/cli.ts` | multi-role interactive demo |
-| E2E | `midnight-app/scripts/e2e-check.ts` | correctness + privacy assertions |
+| E2E | `midnight-app/scripts/` | `e2e-check` · `house-e2e` · `intel-check` |
 | Devnet | `midnight-app/docker-compose.yml` | Midnight node + indexer + proof server, pinned versions |
 
 Stack: Compact 0.31, Midnight.js 4.1, local proof server 8.1. Public testnet deploy: `npm run setup -- --network preview`.
 
+Full protocol writeup, verification method, and an explicit limits section:
+**http://localhost:4600/security.html**.
+
+## Limits — what this does *not* claim
+
+Stated up front, because a demo that oversells its threat model is worse than one
+that admits its edges:
+
+- **The time-lock is not cryptographic timelock encryption.** No VDF, no threshold
+  committee — it's commit-reveal gated on a committed tick, so a seller who never
+  opens the schedule stalls the auction.
+- **The tick counter is not a clock.** It advances when someone calls `tick()`;
+  it is not block height or wall time.
+- **Combinatorial is fixed at three lots**, and **batch supply at three units** —
+  exhaustive winner determination and the clearing ladder are tractable in-circuit
+  precisely at that size. General combinatorial winner determination is NP-hard.
+- **Bid metadata is public by design** (who bid, in what order, when). That's what
+  makes shill detection possible without deanonymisation — and it's also a real
+  fingerprinting surface.
+- **No settlement layer.** This proves who won at what price; it doesn't move funds.
+- **The intelligence scores are heuristics tuned on synthetic fixtures** — prompts
+  for a human, never verdicts.
+
 ## Future work
 
-Escrowed settlement (lock funds with the bid, atomic winner payment), Vickrey second-price variant (needs all reveals before price disclosure), reveal deadlines with slashing, and a browser UI on Lace.
+Escrowed settlement (lock funds with the bid, atomic winner payment), real timelock
+encryption to remove the seller-liveness dependency, Vickrey second-price variant
+(needs all reveals before price disclosure), reveal deadlines with slashing, larger
+combinatorial lots via a proof-of-optimality challenge game rather than exhaustive
+in-circuit search, and a browser UI on Lace.
 
 ---
 
