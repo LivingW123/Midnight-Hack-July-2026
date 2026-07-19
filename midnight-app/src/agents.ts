@@ -108,7 +108,13 @@ export type BrainKind = 'ollama' | 'heuristic';
 let brainKind: BrainKind = 'heuristic';
 let brainModel = '';
 
-/** Probe the local ollama daemon once at boot; fall back silently. */
+/**
+ * Probe the local ollama daemon once at boot. Listing models is not enough —
+ * some builds (e.g. qwen3-vl here) accept the request and return an EMPTY
+ * response, and broken architectures error at load. So each candidate must
+ * pass a real generation probe: produce parseable JSON within the timeout, or
+ * it is skipped. Falls back to transparent heuristics when nothing passes.
+ */
 export async function initBrain(): Promise<{ kind: BrainKind; model: string }> {
   const preferred = process.env.SEALED_BRAIN;
   if (preferred === 'heuristic') return { kind: (brainKind = 'heuristic'), model: '' };
@@ -116,11 +122,37 @@ export async function initBrain(): Promise<{ kind: BrainKind; model: string }> {
     const res = await fetch('http://127.0.0.1:11434/api/tags', { signal: AbortSignal.timeout(1500) });
     const body: any = await res.json();
     const names: string[] = (body?.models ?? []).map((m: any) => String(m.name));
-    const pick = names.find((n) => n.startsWith('qwen')) ?? names.find((n) => n.startsWith('llama')) ?? names[0];
-    if (pick) {
-      brainKind = 'ollama';
-      brainModel = pick;
+    // Text-first ordering; embedding models excluded outright.
+    const candidates = [
+      ...names.filter((n) => /llama3\.2:\d|llama3\.1|qwen2\.5|mistral|phi/.test(n)),
+      ...names.filter((n) => !/embed/.test(n)),
+    ];
+    for (const model of [...new Set(candidates)]) {
+      try {
+        const probe = await fetch('http://127.0.0.1:11434/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model,
+            prompt: 'Reply ONLY with JSON: {"ok": true}',
+            stream: false,
+            format: 'json',
+            options: { temperature: 0, num_predict: 40 },
+          }),
+          signal: AbortSignal.timeout(20_000),
+        });
+        const out: any = await probe.json();
+        const parsed = JSON.parse(out?.response ?? 'null');
+        if (parsed && typeof parsed === 'object') {
+          brainKind = 'ollama';
+          brainModel = model;
+          return { kind: brainKind, model: brainModel };
+        }
+      } catch {
+        // next candidate
+      }
     }
+    brainKind = 'heuristic';
   } catch {
     brainKind = 'heuristic';
   }

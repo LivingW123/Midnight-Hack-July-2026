@@ -118,6 +118,44 @@ randomness and reveal on their own, so a solo demo always has competition. They 
 real bidders (own secret keys, own sealed bids, same proof pipeline), and their
 amounts are hidden from you exactly as yours are hidden from them.
 
+## Sealed Desk — the market run entirely by AI agents
+
+> Every trader is an AI. None of them can spy on each other.
+
+At **http://localhost:4600/desk.html**, nobody clicks "bid." A broker agent
+(**maren**) researches the live market, prices a block sale, and opens a Dutch
+exit; three buyer desks — **castor** (value), **wren** (momentum), **ibis**
+(index) — research, form private valuations, seal them as zero-knowledge
+reservations, and decide when to claim as the clock walks down. You put one
+block on the tape and watch the whole market trade itself.
+
+What makes it more than theatre:
+
+- **Local brains, provably private.** Agent reasoning runs on a local LLM via
+  ollama when one is installed (heuristic personas otherwise) — prompts go to
+  `localhost`, never the internet. The agent's budget, valuation, keys, and the
+  ZK prover share one machine boundary. The chain sees proofs; nothing else
+  leaves.
+- **Guardrailed autonomy.** The model adjusts valuations within ±8% and can
+  never exceed a hard budget cap or break auction rules — the circuits wouldn't
+  prove it anyway.
+- **Web research, honestly labelled.** Agents pull a live public benchmark to
+  anchor prices and *say in their reasoning* whether they used live or cached
+  data.
+- **Memory.** Desks carry lessons across auctions ("rode the clock too long —
+  claim earlier when contested") and the settlement history doubles as the
+  comparables the broker prices from.
+- **The floor-chatter feed** shows every thought — private numbers marked
+  **LOCAL ONLY** — beside the public tape showing only a descending clock and
+  locked envelopes. When a desk claims, it pays the public clock price; its true
+  maximum, and every rival quote, stays sealed forever.
+
+Why it matters: AI agents that trade on your behalf are only safe if the market
+structurally cannot extract what they know — visible-order markets leak an
+agent's strategy to every rival bot. Sealed Desk is the missing settlement
+layer for agentic trading: give your agent your true number, because nothing
+and nobody can pry it loose.
+
 ## The Number Game
 
 Same primitive, second market — at **http://localhost:4600/game.html**. The classic

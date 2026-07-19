@@ -988,8 +988,22 @@ async function startDesk(item: string): Promise<void> {
   think(broker.name, `the block is on the tape — sealed reservations only`);
 }
 
+// deskTick awaits research and (possibly slow) local-LLM calls, so the
+// interval can fire again mid-tick; without this guard two overlapping ticks
+// both saw a buyer as unsealed and double-enqueued their seal.
+let deskTickInFlight = false;
+
 async function deskTick(): Promise<void> {
-  if (!desk.active || !walletReady || activeJob) return;
+  if (deskTickInFlight || !desk.active || !walletReady || activeJob) return;
+  deskTickInFlight = true;
+  try {
+    await deskTickInner();
+  } finally {
+    deskTickInFlight = false;
+  }
+}
+
+async function deskTickInner(): Promise<void> {
   const addr = desk.address;
   let view: HouseView;
   try {
