@@ -493,6 +493,382 @@ input {
   .phase-rail li + li::before { left: -14px; width: 28px; }
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   The Auction House — five mechanisms, the intel sheet, and the
+   motion vocabulary they share.
+
+   Motion rules used throughout:
+   - Entrances stagger via --stagger so lists arrive as a sequence,
+     not a flash. Nothing staggers longer than ~500ms total.
+   - Anything that signals STATE (a price tick, a new commitment,
+     a risk band) animates once on change; nothing loops except the
+     two genuine progress indicators.
+   - Every animation below is disabled wholesale by the
+     prefers-reduced-motion block at the end of this file.
+   ═══════════════════════════════════════════════════════════════ */
+
+.nav-link {
+  color: var(--lamplight);
+  text-decoration: none;
+  margin-right: 14px;
+  font-size: 0.9em;
+  position: relative;
+}
+.nav-link::after {
+  content: '';
+  position: absolute;
+  left: 0; bottom: -3px;
+  width: 100%; height: 1px;
+  background: var(--lamplight);
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.nav-link:hover::after { transform: scaleX(1); transform-origin: left; }
+
+/* ─── Format rack ──────────────────────────────────────────── */
+
+.floor { padding: 26px 28px 0; }
+.format-rack {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.format-card {
+  background: var(--night-raised);
+  border: 1px solid var(--night-line);
+  border-radius: 8px;
+  padding: 14px 15px;
+  animation: cardIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: var(--stagger, 0ms);
+  transition: border-color 0.35s, transform 0.35s, box-shadow 0.35s;
+}
+.format-card:hover { transform: translateY(-3px); border-color: #453f5e; }
+.format-card h3 { font-family: var(--serif); font-size: 1.02rem; font-weight: 500; margin-bottom: 5px; }
+.format-blurb { font-size: 0.84rem; color: var(--dusk); line-height: 1.45; }
+.format-privacy {
+  font-size: 0.78rem;
+  color: var(--lamplight);
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--night-line);
+  line-height: 1.45;
+}
+.shield {
+  display: inline-block;
+  width: 9px; height: 11px;
+  margin-right: 6px;
+  vertical-align: -1px;
+  background: var(--lamplight);
+  clip-path: polygon(50% 0, 100% 22%, 100% 62%, 50% 100%, 0 62%, 0 22%);
+  opacity: 0.85;
+}
+/* The live format gets a lit edge that breathes — the one ambient loop. */
+.format-card.is-live {
+  border-color: var(--lamplight);
+  box-shadow: 0 0 0 1px var(--lamplight-soft), 0 8px 26px -14px var(--lamplight);
+  animation: cardIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both, liveGlow 3.4s ease-in-out 0.6s infinite;
+}
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes liveGlow {
+  0%, 100% { box-shadow: 0 0 0 1px var(--lamplight-soft), 0 8px 26px -16px var(--lamplight); }
+  50%      { box-shadow: 0 0 0 1px var(--lamplight-soft), 0 8px 34px -10px var(--lamplight); }
+}
+
+.lot-privacy {
+  max-width: 62ch;
+  margin: 8px auto 0;
+  font-size: 0.86rem;
+  color: var(--lamplight);
+  line-height: 1.5;
+}
+
+/* ─── Format picker inside the new-auction form ────────────── */
+
+.format-choice { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0; }
+.format-pill {
+  background: transparent;
+  border: 1px solid var(--night-line);
+  color: var(--dusk);
+  border-radius: 100px;
+  padding: 5px 13px;
+  font-size: 0.82rem;
+  transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.format-pill:hover { color: var(--moon); border-color: #4a4363; }
+.format-pill.is-chosen {
+  background: var(--lamplight-soft);
+  border-color: var(--lamplight);
+  color: var(--lamplight);
+}
+.format-params {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 10px;
+  animation: paramsIn 0.35s ease-out both;
+}
+.format-params .field-label { display: flex; flex-direction: column; gap: 4px; font-size: 0.78rem; }
+.format-params input {
+  width: 120px;
+  border-bottom: 1px solid var(--night-line);
+  padding: 4px 0;
+  font-family: var(--mono);
+  font-size: 0.88rem;
+  transition: border-color 0.25s;
+}
+.format-params input:focus { border-color: var(--lamplight); }
+@keyframes paramsIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ─── The descending Dutch clock ───────────────────────────── */
+
+.clock { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
+.clock-price {
+  font-family: var(--serif);
+  font-size: 2.6rem;
+  font-weight: 500;
+  color: var(--lamplight);
+  font-variant-numeric: tabular-nums;
+  display: inline-block;
+}
+.clock-floor { font-size: 0.78rem; color: var(--dusk); font-family: var(--mono); }
+/* Fires only when the price actually changed — a felt "step down". */
+.clock-price.ticked { animation: priceTick 0.55s cubic-bezier(0.2, 1.3, 0.3, 1); }
+@keyframes priceTick {
+  0%   { transform: translateY(-16px); opacity: 0; filter: blur(3px); }
+  55%  { transform: translateY(3px); opacity: 1; filter: none; }
+  100% { transform: none; }
+}
+.clock-track {
+  height: 4px;
+  background: var(--night);
+  border: 1px solid var(--night-line);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+.clock-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--wax), var(--lamplight));
+  transition: width 0.75s cubic-bezier(0.3, 0.9, 0.25, 1);
+}
+
+/* ─── Batch clearing ladder ────────────────────────────────── */
+
+.ladder, .bundles { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--paper-line); }
+.ladder-rows { list-style: none; margin-top: 10px; }
+.ladder-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 7px 10px;
+  border-left: 3px solid var(--paper-line);
+  margin-bottom: 4px;
+  background: var(--paper-shade);
+  animation: rowIn 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: var(--stagger, 0ms);
+  transition: border-color 0.4s, background 0.4s;
+}
+.ladder-row.is-winning { border-left-color: var(--wax); background: #efe9d8; }
+.ladder-price { font-family: var(--mono); font-size: 0.92rem; color: var(--ink); }
+.clearing, .allocation {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: var(--wax);
+  color: var(--paper);
+  border-radius: 4px;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  animation: stampIn 0.5s cubic-bezier(0.2, 1.3, 0.3, 1) both;
+}
+@keyframes rowIn {
+  from { opacity: 0; transform: translateX(-10px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes stampIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ─── Combinatorial bundle book ────────────────────────────── */
+
+.bundle-rows { margin-top: 10px; }
+.bundle-row {
+  display: grid;
+  grid-template-columns: 68px 1fr auto;
+  gap: 10px;
+  align-items: baseline;
+  padding: 7px 10px;
+  border-bottom: 1px dotted var(--paper-line);
+  animation: rowIn 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: var(--stagger, 0ms);
+  transition: background 0.4s;
+}
+.bundle-row.is-allocated { background: #efe9d8; box-shadow: inset 3px 0 0 var(--wax); }
+.bundle-mask {
+  font-family: var(--serif);
+  font-size: 0.95rem;
+  color: var(--ink);
+  letter-spacing: 0.04em;
+}
+.bundle-best { font-family: var(--mono); font-size: 0.9rem; color: var(--ink); }
+.bundle-who { color: var(--ink-soft); font-size: 0.78rem; }
+
+/* ─── Intelligence sheet ───────────────────────────────────── */
+
+.intel-sheet { margin-top: 18px; }
+.intel-block { margin-top: 18px; }
+.intel-block + .intel-block { padding-top: 18px; border-top: 1px solid var(--paper-line); }
+.intel-title {
+  font-family: var(--serif);
+  font-size: 1.02rem;
+  font-weight: 500;
+  color: var(--ink);
+  margin-bottom: 5px;
+}
+.intel-note { font-size: 0.79rem; color: var(--ink-soft); line-height: 1.5; margin-bottom: 12px; }
+.intel-note strong { color: var(--wax); font-weight: 600; }
+.intel-empty { font-size: 0.82rem; color: var(--ink-soft); font-style: italic; }
+
+.shill-row {
+  padding: 10px 12px;
+  margin-bottom: 7px;
+  background: var(--paper-shade);
+  border-left: 3px solid var(--paper-line);
+  border-radius: 3px;
+  animation: rowIn 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: var(--stagger, 0ms);
+  transition: border-color 0.5s, background 0.5s;
+}
+.shill-row.is-watch { border-left-color: #b8892f; }
+.shill-row.is-suspect { border-left-color: var(--wax); background: #efe4dc; }
+.shill-head { display: flex; align-items: center; gap: 10px; }
+.shill-who { color: var(--ink); font-size: 0.85rem; flex: 1; }
+.shill-band {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+}
+.is-watch .shill-band { color: #8a6520; }
+.is-suspect .shill-band { color: var(--wax); font-weight: 600; }
+.shill-risk { display: flex; align-items: center; gap: 7px; }
+.shill-risk em {
+  font-style: normal;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  color: var(--ink);
+  min-width: 22px;
+  text-align: right;
+}
+.risk-fill {
+  display: block;
+  width: 54px;
+  height: 4px;
+  border-radius: 3px;
+  background: var(--paper-line);
+  position: relative;
+  overflow: hidden;
+}
+.risk-fill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: var(--risk, 0%);
+  background: var(--ink-soft);
+  border-radius: 3px;
+  animation: riskGrow 0.7s cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+.is-watch .risk-fill::after { background: #b8892f; }
+.is-suspect .risk-fill::after { background: var(--wax); }
+@keyframes riskGrow { from { width: 0; } }
+
+.shill-signals { list-style: none; margin-top: 7px; }
+.shill-signals li {
+  font-size: 0.76rem;
+  color: var(--ink-soft);
+  line-height: 1.5;
+  padding-left: 12px;
+  position: relative;
+}
+.shill-signals li::before {
+  content: '';
+  position: absolute;
+  left: 2px; top: 8px;
+  width: 3px; height: 3px;
+  border-radius: 50%;
+  background: var(--ink-soft);
+}
+.sig-name { font-family: var(--mono); color: var(--ink); font-size: 0.95em; }
+.sig-none { font-style: italic; }
+
+.advice { animation: rowIn 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.advice-head { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; }
+.advice-action {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 3px 9px;
+  border-radius: 100px;
+  border: 1px solid var(--paper-line);
+  color: var(--ink-soft);
+  transition: all 0.4s;
+}
+.advice-action.is-raise { border-color: #2f6f4a; color: #2f6f4a; background: #e6efe7; }
+.advice-action.is-lower { border-color: var(--wax); color: var(--wax); background: #f2e5e1; }
+.advice-conf { font-size: 0.74rem; color: var(--ink-soft); font-family: var(--mono); }
+.advice-headline { font-size: 0.88rem; color: var(--ink); line-height: 1.5; }
+.advice-suggest {
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  color: var(--wax);
+  margin-top: 7px;
+}
+.advice-why { list-style: none; margin-top: 8px; }
+.advice-why li {
+  font-size: 0.76rem;
+  color: var(--ink-soft);
+  line-height: 1.5;
+  padding-left: 12px;
+  position: relative;
+}
+.advice-why li::before { content: '·'; position: absolute; left: 3px; }
+
+/* ─── Combinatorial lot chips ──────────────────────────────── */
+
+.bundle-picker { margin-bottom: 12px; }
+.lot-chips { display: flex; gap: 7px; margin-top: 6px; }
+.lot-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: 1px solid var(--night-line);
+  border-radius: 100px;
+  font-size: 0.82rem;
+  color: var(--dusk);
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.lot-chip:hover { border-color: #4a4363; color: var(--moon); }
+.lot-chip:has(input:checked) {
+  border-color: var(--lamplight);
+  color: var(--lamplight);
+  background: var(--lamplight-soft);
+}
+.lot-chip input { accent-color: var(--lamplight); cursor: pointer; }
+
+/* Toast entrance restart hook (see house.js) */
+.toast.toast-in { animation: toastIn 0.25s ease-out; }
+
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
