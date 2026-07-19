@@ -734,15 +734,21 @@ async function apiAction(body: any): Promise<any> {
     case 'desk-start': {
       if (desk.active) return { error: 'The desk already has a live exit — let it settle first.' };
       const item = String(body?.item ?? '').trim().slice(0, 120) || '1,000,000 shares — Meridian Industries';
+      const buyers = Array.isArray(body?.buyers) ? body.buyers.map(String) : undefined;
       clearFeed();
       runJob('desk-start', 'The broker prices and opens the exit', async () => {
-        await startDesk(item);
+        await startDesk(item, buyers);
         return `The desk is live: “${item}”. Agents are researching.`;
       });
       return { ok: true };
     }
     case 'desk-stop': {
+      // Also clears the settled mandate so the UI returns to setup.
       desk.active = false;
+      desk.settled = false;
+      desk.address = '';
+      desk.item = '';
+      desk.priceHistory = [];
       return { ok: true };
     }
     default:
@@ -939,6 +945,8 @@ interface DeskState {
   lastClockAt: number;
   valuations: Map<string, bigint>; // buyer -> private valuation (server memory only)
   sealedDone: Set<string>;
+  invited: Set<string>;            // buyer desks taking part in this mandate
+  priceHistory: string[];          // clock steps, oldest first (public data)
   settled: boolean;
 }
 
@@ -950,6 +958,8 @@ const desk: DeskState = {
   lastClockAt: 0,
   valuations: new Map(),
   sealedDone: new Set(),
+  invited: new Set(),
+  priceHistory: [],
   settled: false,
 };
 
@@ -957,7 +967,10 @@ function deskBroker() {
   return DESK_AGENTS.find((a) => a.role === 'broker')!;
 }
 
-async function startDesk(item: string): Promise<void> {
+async function startDesk(item: string, buyers?: string[]): Promise<void> {
+  const validBuyers = DESK_AGENTS.filter((a) => a.role === 'buyer').map((a) => a.name);
+  const invited = (buyers ?? validBuyers).filter((n) => validBuyers.includes(n));
+  desk.invited = new Set(invited.length >= 1 ? invited : validBuyers);
   const signal = await observeMarket();
   const broker = deskBroker();
   think(broker.name, `pricing the exit: ${describeSignal(signal)}`);
@@ -984,8 +997,9 @@ async function startDesk(item: string): Promise<void> {
   desk.lastClockAt = Date.now();
   desk.valuations = new Map();
   desk.sealedDone = new Set();
+  desk.priceHistory = [plan.startPrice.toString()];
   desk.settled = false;
-  think(broker.name, `the block is on the tape — sealed reservations only`);
+  think(broker.name, `the block is on the tape — sealed reservations only; ${desk.invited.size} desk(s) invited`);
 }
 
 // deskTick awaits research and (possibly slow) local-LLM calls, so the
@@ -1049,7 +1063,10 @@ async function deskTickInner(): Promise<void> {
 
   const price = BigInt(view.currentPrice);
   const floor = BigInt(view.floorPrice);
-  const buyers = DESK_AGENTS.filter((a) => a.role === 'buyer');
+  if (desk.priceHistory[desk.priceHistory.length - 1] !== price.toString()) {
+    desk.priceHistory.push(price.toString());
+  }
+  const buyers = DESK_AGENTS.filter((a) => a.role === 'buyer' && desk.invited.has(a.name));
 
   // 1. A buyer who hasn't sealed yet seals (valuation formed on the spot).
   for (const buyer of buyers) {
@@ -1130,6 +1147,8 @@ async function apiDeskStatus(): Promise<any> {
       address: desk.address,
       item: desk.item,
       settled: desk.settled,
+      invited: [...desk.invited],
+      priceHistory: desk.priceHistory,
     },
     agents: DESK_AGENTS.map((a) => ({
       name: a.name,
