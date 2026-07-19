@@ -461,8 +461,16 @@ async function apiIntel(): Promise<any> {
 
 async function apiAction(body: any): Promise<any> {
   if (!walletReady) return { error: 'Still connecting to the wallet — one moment.' };
-  if (activeJob) return { error: 'Another action is still proving. One at a time — each needs its own proof.' };
   const type = String(body?.type ?? '');
+  // Market navigation and agent management queue behind the running proof
+  // instead of bouncing the user; only manual chain actions still reject.
+  const QUEUEABLE = new Set(['game-new', 'game-add-agent', 'agent-bid-now', 'game-leave', 'switch']);
+  if (activeJob && !QUEUEABLE.has(type)) {
+    return { error: 'Another action is still proving. One at a time — each needs its own proof.' };
+  }
+  if (type === 'game-new' && (activeJob?.kind === 'game-new' || lastJob?.kind === 'game-new' && lastJob?.stage === 'queued')) {
+    return { error: 'A market is already opening — one moment.' };
+  }
   const me = currentIdentity();
 
   switch (type) {
@@ -1035,7 +1043,7 @@ async function autoDrive(): Promise<void> {
     });
   } else if (view.phase === 'reckoning') {
     autoDrove = Date.now();
-    runJob('game-finalize', 'Gavel', async () => { await game.callTx.finalize(); return 'Market closed. Losing forecasts stay sealed forever.'; });
+    runJob('game-finalize', 'Closing the market — final settlement proof', async () => { await game.callTx.finalize(); return 'Market settled. Losing forecasts stay sealed forever.'; });
   }
 }
 

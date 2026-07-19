@@ -177,8 +177,8 @@ function render() {
   // Your agents — position card with Submit / Auto.
   const myWrap = $('my-agents');
   if (myWrap) {
-    let mine = [];
-    try { mine = JSON.parse(localStorage.getItem('myAgents') || '[]'); } catch {}
+    // Server is the source of truth for deployed agents — no stale browser state.
+    const mine = s.customAgents || [];
     const sealedIds = new Set(v.entries.map((e) => e.id));
     const nameOf = {}; Object.entries(v.names || {}).forEach(([id, n]) => { nameOf[n] = id; });
     const msig = JSON.stringify(mine.map((n) => [n, sealedIds.has(nameOf[n])])) + v.phase;
@@ -294,7 +294,7 @@ function render() {
     note.hidden = false;
     const who = displayName(v, v.champion);
     const yours = v.isChampion ? ' — that’s you.' : '';
-    note.innerHTML = `${who} takes it, ${v.bestDistance} away from the target${yours}`;
+    note.innerHTML = `\uD83C\uDFC6 ${who} wins \u2014 forecast within ${v.bestDistance} of the outcome${yours}`;
   } else {
     note.hidden = true;
   }
