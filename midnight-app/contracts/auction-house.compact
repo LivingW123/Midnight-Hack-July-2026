@@ -1,0 +1,375 @@
+pragma language_version >= 0.23;
+
+import CompactStandardLibrary;
+
+// ── The Auction House — five sealed mechanisms in one contract ──────────────
+//
+// Every format shares one privacy invariant: a bid goes on-chain ONLY as a
+// hiding+binding commitment. What separates the formats is *what the circuit
+// is allowed to prove about that commitment without opening it*.
+//
+//   firstPrice     Baseline. Highest revealed bid wins; losers stay sealed.
+//   dutch          Price descends in public. Bidders seal a reservation price
+//                  and later prove `reservation >= currentPrice` in zero
+//                  knowledge — demand is never revealed, not even on winning.
+//   batch          Uniform-price clearing across up to 3 units. Every winner
+//                  pays the same clearing price, so there is nothing to gain
+//                  by outbidding at the last second (no gas war).
+//   candle         Seller commits a secret end-index BEFORE any bid arrives.
+//                  Bids arriving after it are void. Binding commitment =
+//                  provably fair random close.
+//   combinatorial  Bids on bundles of 3 lots (bitmask 1..7). Winner
+//                  determination enumerates all 5 partitions of 3 lots
+//                  in-circuit and picks the revenue-maximising allocation.
+//   timelock       Commit now, reveal later: reveals stay shut until the
+//                  seller opens a committed unlock tick AND the public tick
+//                  counter has passed it.
+//
+// One contract rather than five keeps a single set of prover/verifier keys
+// and one deploy path — the mechanisms differ by circuit, not by codebase.
+
+export enum Format { firstPrice, dutch, batch, candle, combinatorial, timelock }
+export enum Phase { open, reveal, closed }
+
+export ledger format: Format;
+export ledger phase: Phase;
+export ledger item: Opaque<"string">;
+export ledger owner: Bytes<32>;
+
+// ── Sealed bids (every format) ─────────────────────────────────────────────
+// commitment = commit([amount, bundleMask], nonce). bundleMask is 0 for every
+// format except combinatorial, so one scheme binds both fields everywhere.
+export ledger bids: Map<Bytes<32>, Bytes<32>>;
+// Arrival order, 0-based. Public by construction — the candle needs it, and
+// it is exactly the metadata the shill-detector reads (never bid values).
+export ledger bidIndex: Map<Bytes<32>, Uint<64>>;
+export ledger bidderCount: Counter;
+export ledger revealedCount: Counter;
+
+// ── Outcome (firstPrice, candle, dutch) ────────────────────────────────────
+export ledger highestBid: Uint<64>;
+export ledger winner: Bytes<32>;
+export ledger hasWinner: Boolean;
+
+// ── Dutch ──────────────────────────────────────────────────────────────────
+export ledger currentPrice: Uint<64>;
+export ledger floorPrice: Uint<64>;
+export ledger priceStep: Uint<64>;
+// Public tick counter. Drives the Dutch descent and the timelock gate.
+export ledger tickCount: Counter;
+
+// ── Batch (uniform price, up to 3 units) ───────────────────────────────────
+export ledger supply: Uint<64>;
+export ledger slot0Price: Uint<64>;
+export ledger slot1Price: Uint<64>;
+export ledger slot2Price: Uint<64>;
+export ledger slot0Winner: Bytes<32>;
+export ledger slot1Winner: Bytes<32>;
+export ledger slot2Winner: Bytes<32>;
+export ledger filledSlots: Uint<64>;
+export ledger clearingPrice: Uint<64>;
+export ledger clearingLocked: Boolean;
+
+// ── Candle / timelock schedule ─────────────────────────────────────────────
+// Committed at deploy, opened later. Binding: the seller cannot move it once
+// bids start arriving.
+export ledger scheduleCommit: Bytes<32>;
+export ledger scheduleOpen: Boolean;
+export ledger scheduleTick: Uint<64>;
+
+// ── Combinatorial (3 lots -> bundle masks 1..7) ────────────────────────────
+export ledger bundleBest: Map<Uint<64>, Uint<64>>;
+export ledger bundleWinner: Map<Uint<64>, Bytes<32>>;
+export ledger allocationValue: Uint<64>;
+export ledger allocationA: Uint<64>;
+export ledger allocationB: Uint<64>;
+export ledger allocationC: Uint<64>;
+export ledger allocationLocked: Boolean;
+
+// ── Private data — never leaves the bidder's machine ───────────────────────
+witness localSecretKey(): Bytes<32>;
+witness bidAmount(): Uint<64>;
+witness bidNonce(): Bytes<32>;
+witness bidBundle(): Uint<64>;
+// Seller-only: the candle end-index / timelock unlock tick and its nonce.
+witness scheduleSecret(): Uint<64>;
+witness scheduleNonce(): Bytes<32>;
+
+constructor(
+  itemDesc: Opaque<"string">,
+  auctionFormat: Format,
+  startPrice: Uint<64>,
+  floor: Uint<64>,
+  step: Uint<64>,
+  units: Uint<64>,
+  schedule: Bytes<32>,
+) {
+  item = disclose(itemDesc);
+  format = disclose(auctionFormat);
+  phase = Phase.open;
+  owner = disclose(publicKey(localSecretKey()));
+  currentPrice = disclose(startPrice);
+  floorPrice = disclose(floor);
+  priceStep = disclose(step);
+  supply = disclose(units);
+  scheduleCommit = disclose(schedule);
+}
+
+// Pseudonymous on-chain identity: hash of a local secret, domain-separated.
+// Same derivation as sealed-auction/number-game, so one paddle keeps a stable
+// id across every market in the house.
+export circuit publicKey(sk: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<2, Bytes<32>>>([pad(32, "sealed:pk:"), sk]);
+}
+
+// The one commitment scheme, used by every format.
+export circuit bidCommitment(amount: Uint<64>, bundle: Uint<64>, nonce: Bytes<32>): Bytes<32> {
+  return persistentCommit<Vector<2, Uint<64>>>([amount, bundle], nonce);
+}
+
+circuit bestOfBundle(mask: Uint<64>): Uint<64> {
+  return bundleBest.member(mask) ? bundleBest.lookup(mask) : 0 as Uint<64>;
+}
+
+circuit maxOf(a: Uint<64>, b: Uint<64>): Uint<64> {
+  return a >= b ? a : b;
+}
+
+// ── Sealing ────────────────────────────────────────────────────────────────
+
+// Seal a bid. Identical on-chain footprint in every format: an id, an opaque
+// commitment, and an arrival index. Nothing about the value is learnable.
+export circuit placeBid(): [] {
+  assert(phase == Phase.open, "bidding is closed");
+  const amount = bidAmount();
+  assert(amount > 0, "bid must be positive");
+  const bundle = bidBundle();
+  // Only combinatorial bids carry a bundle; everything else must pin it to 0
+  // so the commitment scheme stays unambiguous.
+  if (format == Format.combinatorial) {
+    assert(bundle >= 1, "bundle must select at least one lot");
+    assert(bundle <= 7, "bundle mask covers 3 lots (1..7)");
+  } else {
+    assert(bundle == 0, "this format takes no bundle");
+  }
+  const id = disclose(publicKey(localSecretKey()));
+  assert(!bids.member(id), "this identity already placed a bid");
+  bids.insert(id, disclose(bidCommitment(amount, bundle, bidNonce())));
+  bidIndex.insert(id, bidderCount as Uint<64>);
+  bidderCount.increment(1);
+}
+
+// Public clock. Anyone may tick: it walks the Dutch price down one step and
+// advances the timelock gate. Nothing private is touched.
+export circuit tick(): [] {
+  assert(phase == Phase.open, "the clock only runs while bidding is open");
+  tickCount.increment(1);
+  if (format == Format.dutch) {
+    const next = currentPrice > priceStep ? (currentPrice - priceStep) as Uint<64> : 0 as Uint<64>;
+    currentPrice = maxOf(next, floorPrice);
+  }
+}
+
+// ── Dutch: claim at the current price without revealing demand ─────────────
+//
+// The star circuit. The bidder proves their sealed reservation price is at
+// least the current public price — and the proof discloses NOTHING else. The
+// chain learns "someone was willing to pay >= currentPrice", never how much
+// more they would have paid. Their true demand survives the sale.
+export circuit claimAtCurrentPrice(): [] {
+  assert(format == Format.dutch, "not a Dutch auction");
+  assert(phase == Phase.open, "the clock has stopped");
+  assert(!hasWinner, "already claimed");
+  const id = disclose(publicKey(localSecretKey()));
+  assert(bids.member(id), "no sealed reservation for this identity");
+  const amount = bidAmount();
+  const bundle = bidBundle();
+  assert(bids.lookup(id) == bidCommitment(amount, bundle, bidNonce()), "does not open the sealed reservation");
+  // Private >= public. No disclose() on `amount` anywhere in this circuit.
+  assert(amount >= currentPrice, "reservation price is below the current price");
+  winner = id;
+  hasWinner = true;
+  highestBid = currentPrice; // the clearing price is public; the bid is not
+  phase = Phase.closed;
+}
+
+// ── Phase control ──────────────────────────────────────────────────────────
+
+export circuit closeBidding(): [] {
+  assert(phase == Phase.open, "bidding is not open");
+  assert(publicKey(localSecretKey()) == owner, "only the seller can close bidding");
+  assert(format != Format.dutch, "a Dutch auction closes when someone claims");
+  phase = Phase.reveal;
+}
+
+// Open the committed schedule: the candle's secret end-index, or the
+// timelock's unlock tick. Verifying against scheduleCommit proves the seller
+// fixed this value before a single bid arrived.
+export circuit openSchedule(): [] {
+  assert(phase == Phase.reveal, "not in reveal phase");
+  assert(publicKey(localSecretKey()) == owner, "only the seller can open the schedule");
+  assert(!scheduleOpen, "schedule already open");
+  assert(format == Format.candle || format == Format.timelock, "this format has no schedule");
+  const secret = scheduleSecret();
+  const commitment = persistentCommit<Uint<64>>(secret, scheduleNonce());
+  assert(scheduleCommit == commitment, "does not open the committed schedule");
+  scheduleTick = disclose(secret);
+  scheduleOpen = true;
+}
+
+// ── Reveal ─────────────────────────────────────────────────────────────────
+
+// Shared reveal preconditions for the commit-reveal formats.
+circuit assertRevealable(): [] {
+  assert(phase == Phase.reveal, "not in reveal phase");
+  if (format == Format.candle) {
+    assert(scheduleOpen, "the candle end-index is still sealed");
+  }
+  if (format == Format.timelock) {
+    assert(scheduleOpen, "the unlock tick is still sealed");
+    assert(tickCount >= scheduleTick, "still time-locked — the unlock tick has not passed");
+  }
+}
+
+// firstPrice / candle / timelock: highest revealed bid takes the lot.
+export circuit revealBid(): [] {
+  assert(format != Format.dutch, "Dutch auctions never reveal a bid");
+  assert(format != Format.batch, "batch auctions reveal through revealForBatch");
+  assert(format != Format.combinatorial, "combinatorial auctions reveal through revealBundle");
+  assertRevealable();
+  const id = disclose(publicKey(localSecretKey()));
+  assert(bids.member(id), "no sealed bid found for this identity");
+  const amount = bidAmount();
+  assert(bids.lookup(id) == bidCommitment(amount, bidBundle(), bidNonce()), "does not open the sealed bid");
+  // The candle: a bid that arrived after the secret end-index simply never
+  // counted, and the seller could not have known which bids that would be.
+  if (format == Format.candle) {
+    assert(bidIndex.lookup(id) <= scheduleTick, "this bid arrived after the candle went out");
+  }
+  revealedCount.increment(1);
+  if (disclose(amount > highestBid)) {
+    highestBid = disclose(amount);
+    winner = id;
+    hasWinner = true;
+  }
+}
+
+// batch: insert-sort the revealed bid into the top-`supply` ladder. Only the
+// bids that land in a slot are ever written down; anything that falls off the
+// bottom is discarded without its value touching the ledger.
+export circuit revealForBatch(): [] {
+  assert(format == Format.batch, "not a batch auction");
+  assert(!clearingLocked, "clearing price already locked");
+  assertRevealable();
+  const id = disclose(publicKey(localSecretKey()));
+  assert(bids.member(id), "no sealed bid found for this identity");
+  const amount = bidAmount();
+  assert(bids.lookup(id) == bidCommitment(amount, bidBundle(), bidNonce()), "does not open the sealed bid");
+  revealedCount.increment(1);
+
+  const v = disclose(amount);
+  const p0 = slot0Price;
+  const p1 = slot1Price;
+  const w0 = slot0Winner;
+  const w1 = slot1Winner;
+  if (v > p0) {
+    slot2Price = p1; slot2Winner = w1;
+    slot1Price = p0; slot1Winner = w0;
+    slot0Price = v;  slot0Winner = id;
+  } else if (v > p1) {
+    slot2Price = p1; slot2Winner = w1;
+    slot1Price = v;  slot1Winner = id;
+  } else if (v > slot2Price) {
+    slot2Price = v;  slot2Winner = id;
+  }
+  // Slots fill from the top, so after N reveals exactly min(N, supply) of them
+  // are winners — no separate occupancy bookkeeping needed.
+  const filled = filledSlots + 1;
+  filledSlots = filled <= supply ? filled as Uint<64> : supply;
+}
+
+// Uniform price: every winner pays the LOWEST winning bid, so bidding your
+// true value is safe and last-second outbidding buys you nothing.
+export circuit lockClearingPrice(): [] {
+  assert(format == Format.batch, "not a batch auction");
+  assert(phase == Phase.reveal, "not in reveal phase");
+  assert(!clearingLocked, "clearing price already locked");
+  assert(filledSlots > 0, "no bids revealed");
+  const price = filledSlots >= 3 ? slot2Price : (filledSlots == 2 ? slot1Price : slot0Price);
+  clearingPrice = price;
+  highestBid = price;
+  winner = slot0Winner;
+  hasWinner = true;
+  clearingLocked = true;
+}
+
+// ── Combinatorial ──────────────────────────────────────────────────────────
+
+// Reveal a bundle bid. The mask becomes public (which lots you wanted); only
+// the best bid per bundle is retained.
+export circuit revealBundle(): [] {
+  assert(format == Format.combinatorial, "not a combinatorial auction");
+  assert(!allocationLocked, "allocation already locked");
+  assertRevealable();
+  const id = disclose(publicKey(localSecretKey()));
+  assert(bids.member(id), "no sealed bid found for this identity");
+  const amount = bidAmount();
+  const bundle = bidBundle();
+  assert(bids.lookup(id) == bidCommitment(amount, bundle, bidNonce()), "does not open the sealed bid");
+  revealedCount.increment(1);
+  const mask = disclose(bundle);
+  const v = disclose(amount);
+  if (v > bestOfBundle(mask)) {
+    bundleBest.insert(mask, v);
+    bundleWinner.insert(mask, id);
+  }
+}
+
+// Winner determination over 3 lots. The 5 partitions of {A,B,C} are:
+//   {ABC}  {AB|C}  {AC|B}  {BC|A}  {A|B|C}
+// A missing bundle scores 0, which also covers every partial allocation
+// (leaving a lot unsold). Enumerating all 5 in-circuit means the allocation
+// is not merely asserted by the seller — it is proven optimal.
+export circuit lockAllocation(): [] {
+  assert(format == Format.combinatorial, "not a combinatorial auction");
+  assert(phase == Phase.reveal, "not in reveal phase");
+  assert(!allocationLocked, "allocation already locked");
+  assert(revealedCount > 0, "no bids revealed");
+
+  const vABC = bestOfBundle(7);
+  const vAB = bestOfBundle(3); const vC = bestOfBundle(4);
+  const vAC = bestOfBundle(5); const vB = bestOfBundle(2);
+  const vBC = bestOfBundle(6); const vA = bestOfBundle(1);
+
+  const p1 = vABC;
+  const p2 = (vAB + vC) as Uint<64>;
+  const p3 = (vAC + vB) as Uint<64>;
+  const p4 = (vBC + vA) as Uint<64>;
+  const p5 = (vA + vB + vC) as Uint<64>;
+
+  const best = maxOf(maxOf(maxOf(p1, p2), maxOf(p3, p4)), p5);
+  assert(best > 0, "no allocation has any value");
+  allocationValue = best;
+
+  // Record the winning partition as up to three bundle masks (0 = unused).
+  if (best == p1) {
+    allocationA = 7; allocationB = 0; allocationC = 0;
+  } else if (best == p2) {
+    allocationA = 3; allocationB = 4; allocationC = 0;
+  } else if (best == p3) {
+    allocationA = 5; allocationB = 2; allocationC = 0;
+  } else if (best == p4) {
+    allocationA = 6; allocationB = 1; allocationC = 0;
+  } else {
+    allocationA = 1; allocationB = 2; allocationC = 4;
+  }
+  allocationLocked = true;
+  highestBid = best;
+  hasWinner = true;
+}
+
+export circuit finalize(): [] {
+  assert(phase == Phase.reveal, "auction is not in reveal phase");
+  assert(publicKey(localSecretKey()) == owner, "only the seller can finalize");
+  phase = Phase.closed;
+}
