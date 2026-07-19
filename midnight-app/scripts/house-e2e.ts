@@ -55,26 +55,44 @@ function amountPatterns(n: bigint): string[] {
   return [be, le, n.toString()];
 }
 
-/** Everything the indexer exposes, flattened into one searchable string. */
-async function stateHaystack(providers: any, addr: string): Promise<string> {
-  const parts: string[] = [];
+/**
+ * Everything the indexer exposes, split into two channels so each pattern is
+ * searched where it could actually manifest:
+ *  - hex: raw serialized state + commitment blobs. Searched with the 16-char
+ *    BE/LE encodings only — short DECIMAL strings like "250" occur inside
+ *    random hex with probability 1/4096 per position, which made the old
+ *    single-haystack check a coin-flip false positive.
+ *  - json: the parsed ledger view, where a leaked value would surface as an
+ *    actual JSON number. Searched with all three encodings, decimal bounded
+ *    by non-digit neighbours so 250 doesn't match 12500.
+ */
+interface Haystack {
+  hex: string;
+  json: string;
+}
+
+async function stateHaystack(providers: any, addr: string): Promise<Haystack> {
+  const hexParts: string[] = [];
   try {
     const cs = await providers.publicDataProvider.queryContractState(addr);
     const data: any = cs?.data;
-    if (data && typeof data.serialize === 'function') parts.push(Buffer.from(data.serialize()).toString('hex'));
-    else if (data instanceof Uint8Array) parts.push(Buffer.from(data).toString('hex'));
-    else if (data?.toString) parts.push(String(data.toString()));
+    if (data && typeof data.serialize === 'function') hexParts.push(Buffer.from(data.serialize()).toString('hex'));
+    else if (data instanceof Uint8Array) hexParts.push(Buffer.from(data).toString('hex'));
+    else if (data?.toString) hexParts.push(String(data.toString()));
   } catch {
     // raw form unavailable — the parsed view below still covers ledger contents
   }
   const view = await readHouseLedger(providers, addr);
-  parts.push(JSON.stringify(view, (_k, v) => (typeof v === 'bigint' ? v.toString() : v)));
-  return parts.join('|').toLowerCase();
+  const json = JSON.stringify(view, (_k, v) => (typeof v === 'bigint' ? v.toString() : v));
+  return { hex: hexParts.join('|').toLowerCase(), json: json.toLowerCase() };
 }
 
-function assertAbsent(haystack: string, value: bigint, label: string): void {
-  const found = amountPatterns(value).some((p) => haystack.includes(p.toLowerCase()));
-  check(!found, label);
+function assertAbsent(haystack: Haystack, value: bigint, label: string): void {
+  const [be, le] = amountPatterns(value);
+  const inHex = haystack.hex.includes(be) || haystack.hex.includes(le);
+  const inJsonHex = haystack.json.includes(be) || haystack.json.includes(le);
+  const decimal = new RegExp(`(^|[^0-9])${value.toString()}([^0-9]|$)`).test(haystack.json);
+  check(!inHex && !inJsonHex && !decimal, label);
 }
 
 async function tx(label: string, fn: () => Promise<any>): Promise<any> {
