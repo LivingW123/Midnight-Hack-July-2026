@@ -93,6 +93,85 @@ function drawHistogram(view) {
   }
 }
 
+/* ── Your agent's scorecard ───────────────────────────────────────────────
+   Accuracy, not profit. This market settles who forecast closest and moves no
+   funds, so there is no P&L to show and none is invented. Every value below
+   is real: the forecast comes from this machine's private bid record, the
+   outcome and champion from the chain. */
+function agentCard(a) {
+  const esc = (x) => String(x).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const r = a.record || { markets: 0, wins: 0, winRate: 0, avgDistance: 0, bestDistance: 0 };
+
+  // ── status line: what it is doing right now ──
+  let status;
+  if (a.stage) {
+    const pct = Math.round((a.stage.step / a.stage.total) * 100);
+    status =
+      '<div class="ma-progress">' +
+        '<div class="ma-prog-top">' +
+          '<span class="ma-prog-label">' + esc(a.stage.label) + '</span>' +
+          '<span class="ma-prog-count">step ' + a.stage.step + ' of ' + a.stage.total + '</span>' +
+        '</div>' +
+        '<div class="ma-prog-track"><span class="ma-prog-fill" style="width:' + pct + '%"></span></div>' +
+        '<p class="ma-prog-detail">' + esc(a.stage.detail) + '</p>' +
+      '</div>';
+  } else if (a.revealed) {
+    status = '<p class="ma-status">Forecast revealed on-chain — it is on the record now.</p>';
+  } else if (a.sealed) {
+    status = '<p class="ma-status">Position sealed on-chain \uD83D\uDD12 — the number stays on this machine.</p>';
+  } else if (a.forecast !== null) {
+    status = '<p class="ma-status">Research complete. Waiting to seal.</p>';
+  } else {
+    status = '<p class="ma-status">Idle — no forecast on this market yet.</p>' +
+      '<button class="btn btn-primary ma-bid" data-bid>Research &amp; seal now</button>';
+  }
+
+  // ── this market ──
+  const thisMarket =
+    '<div class="ma-stats">' +
+      stat('Forecast', a.forecast === null ? '—' : a.forecast + '<span class="ma-unit">/100</span>',
+           a.forecast === null ? '' : 'local only') +
+      stat('Confidence', a.forecast === null ? '—' : conviction(a.forecast), 'implied by the forecast') +
+      stat('Result', a.distance === null ? 'pending' : (a.won ? 'won' : 'lost'),
+           a.distance === null ? 'oracle has not resolved' : 'off by ' + a.distance) +
+    '</div>';
+
+  // ── track record ──
+  const record = r.markets === 0
+    ? '<p class="ma-record-empty">No settled markets yet — a record builds as the oracle resolves each one.</p>'
+    : '<div class="ma-stats ma-record">' +
+        stat('Markets', r.markets, 'settled') +
+        stat('Won', r.wins, Math.round(r.winRate * 100) + '% win rate') +
+        stat('Avg. error', r.avgDistance, 'lower is better') +
+        stat('Best call', r.bestDistance, 'closest to date') +
+      '</div>';
+
+  return '<div class="ma-top">' +
+      '<span class="ma-name">' + esc(a.name) + '</span>' +
+      (a.won ? '<span class="ma-badge won">champion</span>' : '') +
+      (a.sealed && !a.revealed ? '<span class="ma-badge sealed">sealed</span>' : '') +
+      (a.stage ? '<span class="ma-badge live">researching</span>' : '') +
+    '</div>' +
+    (a.prompt ? '<p class="ma-strategy">' + esc(a.prompt) + '</p>' : '') +
+    status +
+    '<p class="ma-section">This market</p>' + thisMarket +
+    '<p class="ma-section">Track record</p>' + record;
+}
+
+function stat(label, value, note) {
+  return '<div class="ma-stat"><span class="ma-stat-label">' + label + '</span>' +
+    '<span class="ma-stat-value">' + value + '</span>' +
+    (note ? '<span class="ma-stat-note">' + note + '</span>' : '') + '</div>';
+}
+
+/* A forecast of 50 is maximum uncertainty; the distance from 50 is how strong
+   a view the agent actually took. */
+function conviction(forecast) {
+  const d = Math.abs(forecast - 50);
+  const word = d >= 35 ? 'very strong' : d >= 20 ? 'strong' : d >= 10 ? 'moderate' : 'slight';
+  return word + '<span class="ma-unit"> ' + (forecast >= 50 ? 'yes' : 'no') + '</span>';
+}
+
 function render() {
   const s = state.status;
   if (!s) return;
@@ -178,10 +257,10 @@ function render() {
   const myWrap = $('my-agents');
   if (myWrap) {
     // Server is the source of truth for deployed agents — no stale browser state.
-    const mine = s.customAgents || [];
-    const sealedIds = new Set(v.entries.map((e) => e.id));
-    const nameOf = {}; Object.entries(v.names || {}).forEach(([id, n]) => { nameOf[n] = id; });
-    const msig = JSON.stringify(mine.map((n) => [n, sealedIds.has(nameOf[n])])) + v.phase;
+    // Every field on these cards comes from the server: the forecast the agent
+    // sealed, its live pipeline stage, and its record across settled markets.
+    const mine = s.agents || [];
+    const msig = JSON.stringify(mine) + v.phase;
     if (myWrap.dataset.state !== msig) {
       myWrap.dataset.state = msig;
       myWrap.innerHTML = '';
@@ -207,30 +286,15 @@ function render() {
         }));
         myWrap.appendChild(box);
       }
-      for (const n of mine) {
-        const sealed = sealedIds.has(nameOf[n]);
-        let hash = 0; for (const c of n) hash = (hash * 31 + c.charCodeAt(0)) >>> 0;
-        const conf = 25 + (hash % 55);
-        const side = conf >= 50 ? 'yes' : 'no';
-        const amt = ((hash % 90) + 10) * 100;
+      for (const a of mine) {
         const card = document.createElement('div');
         card.className = 'my-agent';
-        // The side and stake appear only AFTER the research log has run and
-        // the position is sealed — research first, price second.
-        card.innerHTML = '<div class="ma-top"><span class="ma-name">' + n + '</span>' +
-          (sealed
-            ? (($('phase-banner').textContent = n + ' placed $' + amt.toLocaleString() + ' on ' + side.toUpperCase() + ' \u2014 sealed on-chain \uD83D\uDD12'), '') +
-              '<span class="ma-side ' + side + '">' + side.toUpperCase() + '</span>' +
-              '<span class="ma-amt">$' + amt.toLocaleString() + ' stake</span>' +
-              '<span class="ma-state">position sealed on-chain \uD83D\uDD12</span>'
-            : '<span class="ma-state" style="margin-left:0">\uD83D\uDD0E researching \u2014 live log below</span>' +
-              '<button class="btn btn-primary" style="padding:6px 14px;font-size:13px;margin-left:auto" data-bid>Bid now</button>' +
-              '<button class="btn btn-ghost" style="padding:6px 14px;font-size:13px" data-auto>Auto</button>') +
-          '</div>';
+        card.innerHTML = agentCard(a);
         const bidBtn = card.querySelector('[data-bid]');
-        if (bidBtn) bidBtn.addEventListener('click', () => { act({ type: 'agent-bid-now' }); toast(n + ' is placing its sealed bid…'); });
-        const autoBtn = card.querySelector('[data-auto]');
-        if (autoBtn) autoBtn.addEventListener('click', () => toast(n + ' set to auto — it will bid when its research completes.'));
+        if (bidBtn) bidBtn.addEventListener('click', () => {
+          act({ type: 'agent-bid-now' });
+          toast(a.name + ' is sealing its forecast now.');
+        });
         myWrap.appendChild(card);
       }
     }

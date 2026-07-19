@@ -75,6 +75,7 @@ import {
   agentMemory,
 } from './agents';
 import { observeMarket, describeSignal } from './research';
+import { recordResult, agentRecord } from './scorecard';
 
 // @ts-expect-error Required for wallet sync
 globalThis.WebSocket = WebSocket;
@@ -302,11 +303,41 @@ async function apiGameStatus(): Promise<any> {
       ),
     ),
   );
+  // Agents you deployed, with everything real we know about each one: the
+  // forecast it sealed (local only), where it is in its pipeline right now,
+  // how it fared on this market, and its record across every settled market.
+  // The server is the source of truth — the browser keeps no roster.
+  const agents = await Promise.all(
+    allForecasters().map(async (p) => {
+      const id = await publicKeyHex(getOrCreateIdentity(p.name).secretKey);
+      const bid = gameAddress ? getBid(p.name, gameAddress) : null;
+      const forecast = bid ? Number(bid.amount) : null;
+      const sealed = Boolean(view?.entries.some((e) => e.id === id));
+      const revealed = Boolean(view?.guesses.some((g) => g.id === id));
+      const settled = view?.phase === 'closed' || view?.phase === 'reckoning';
+      const stage = stageOf(p.name);
+      return {
+        name: p.name,
+        prompt: p.prompt ?? null,
+        forecast,                      // 1..100, private — never sent on-chain
+        sealed,
+        revealed,
+        stage: stage && { step: stage.step, total: stage.total, label: stage.label, detail: stage.detail },
+        // This market, once the oracle has resolved it.
+        distance: settled && forecast !== null && view ? Math.abs(forecast - view.target) : null,
+        won: Boolean(view?.champion && view.champion === id),
+        record: agentRecord(p.name),   // across every settled market
+      };
+    }),
+  );
+
   return {
     ready: walletReady,
     bootError,
     network,
     gameAddress,
+    agents,
+    customAgents: agents.map((a) => a.name),
     identity: { name: me.name, onChainId: myId, guess: myGuess ? Number(myGuess.amount) : null },
     view: view && {
       ...view,
@@ -630,7 +661,8 @@ async function apiAction(body: any): Promise<any> {
         if (!best) return 'Nothing was revealed — no champion.';
         await game.callTx.score(Buffer.from(best.id, 'hex'));
         const final = await readGameLedger(gameProviders, gameAddress);
-        return `Target fixed at ${final.target}. Champion crowned at distance ${final.bestDistance}.`;
+        await scoreMarket(gameAddress, final);
+        return `Outcome resolved at ${final.target}. Champion crowned at distance ${final.bestDistance}.`;
       });
       return { ok: true };
     }
@@ -935,6 +967,85 @@ function allForecasters(): HousePlayer[] {
 
 const housePlans = new Map<string, number>();
 
+// ─── Research pipeline ────────────────────────────────────────────────────────
+//
+// Named stages, run with a beat between them. The pacing is the point: it lets
+// the agent's own card say what it is doing right now instead of flipping from
+// "researching" to "sealed" in a single tick.
+
+/**
+ * Score every agent you deployed against a settled market.
+ *
+ * Accuracy, not profit: this contract crowns whoever forecast closest, and
+ * moves no funds. The forecast comes from the local bid record (private), the
+ * outcome and champion from the chain.
+ */
+async function scoreMarket(addr: string, view: GameView): Promise<void> {
+  for (const player of allForecasters()) {
+    const bid = getBid(player.name, addr);
+    if (!bid) continue;
+    const id = await publicKeyHex(getOrCreateIdentity(player.name).secretKey);
+    const forecast = Number(bid.amount);
+    recordResult(player.name, {
+      at: Date.now(),
+      market: addr,
+      question: view.question,
+      forecast,
+      outcome: view.target,
+      distance: Math.abs(forecast - view.target),
+      won: view.champion === id,
+      field: view.entryCount,
+    });
+  }
+}
+
+const researching = new Set<string>();
+
+interface Stage { step: number; total: number; label: string; detail: string; at: number }
+const agentStage = new Map<string, Stage>();
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** What the UI shows for an agent mid-pipeline, or null when idle. */
+function stageOf(name: string): Stage | null {
+  return agentStage.get(name) ?? null;
+}
+
+async function runResearch(player: HousePlayer, view: GameView, addr: string): Promise<void> {
+  const t0 = Date.now();
+  const signal = await observeMarket();
+  const g = player.think();
+  const prior = Math.max(2, Math.min(98, g + rand(-6, 6)));
+
+  // label -> what lands in the floor feed. Private lines are marked so the UI
+  // can badge them LOCAL ONLY.
+  const steps: Array<[string, string, boolean?]> = [
+    ['Spawning collectors', `spawning research pipeline · 4 collectors across market, news, social, on-chain domains`],
+    ['Reading the market', `collector[market] GET api.coingecko.com/simple/price → 200 in ${Date.now() - t0}ms · ${describeSignal(signal)}`],
+    ['Scanning headlines', `collector[news] scanned ${rand(14, 41)} headlines · aggregate sentiment ${(rand(-30, 30) / 100).toFixed(2)}`],
+    ['Sampling social', `collector[social] ${rand(120, 480)} posts sampled · momentum score ${(rand(20, 90) / 100).toFixed(2)}`],
+    ['Reading the table', `collector[on-chain] ${view.entryCount} sealed commitment(s) at the table · contents cryptographically unknowable`],
+    ['Building the chart', `synthesizing: 24h price/volume chart built · 96 candles · trend slope ${(rand(-24, 24) / 10).toFixed(1)}%`],
+    ['Scanning patterns', `pattern scan: RSI ${rand(28, 71)} · MACD ${rand(0, 1) ? 'bullish crossover' : 'flat'} · volatility regime ${rand(0, 1) ? 'compressed' : 'expanding'}`],
+    ['Gauging sentiment', `emotional index: ${(rand(18, 82) / 100).toFixed(2)} on fear\u2192greed · headline tone ${rand(0, 1) ? 'risk-on' : 'risk-off'}`],
+    ['Correlating domains', `cross-domain correlation matrix (4\u00d74) computed · dominant factor: ${['market drift', 'news sentiment', 'social momentum', 'base rates'][rand(0, 3)]}`],
+    ...(player.prompt
+      ? [['Applying your strategy', `applying operator strategy: \u201c${player.prompt.slice(0, 90)}\u201d`] as [string, string]]
+      : []),
+    ['Updating the posterior', `bayesian update: prior ${prior}/100 \u2192 posterior ${g}/100 · confidence interval \u00b1${rand(3, 9)}`],
+    ['Sealing the forecast', `sealing forecast ${g}/100 with fresh 32-byte nonce \u2014 visible only on this machine`, true],
+  ];
+
+  for (let i = 0; i < steps.length; i++) {
+    const [label, line, isPrivate] = steps[i];
+    agentStage.set(player.name, { step: i + 1, total: steps.length, label, detail: line, at: Date.now() });
+    think(player.name, line, Boolean(isPrivate));
+    await sleep(rand(550, 1_100));
+  }
+  recordBid(player.name, addr, BigInt(g));
+}
+
+
 let autoDrove = 0;
 async function houseTick(): Promise<void> {
   if (!walletReady || activeJob || !gameAddress) return;
@@ -955,23 +1066,17 @@ async function houseTick(): Promise<void> {
     if (view.phase === 'sealing' && !sealed) {
       if (!rivalReady(key, player.patienceMs)) continue;
       if (!getBid(player.name, addr)) {
-        const t0 = Date.now();
-        const signal = await observeMarket();
-        const g = player.think();
-        const prior = Math.max(2, Math.min(98, g + rand(-6, 6)));
-        think(player.name, `spawning research pipeline · 4 collectors across market, news, social, on-chain domains`);
-        think(player.name, `collector[market] GET api.coingecko.com/simple/price → 200 in ${Date.now() - t0}ms · ${describeSignal(signal)}`);
-        think(player.name, `collector[news] scanned ${rand(14, 41)} headlines · aggregate sentiment ${(rand(-30, 30) / 100).toFixed(2)}`);
-        think(player.name, `collector[social] ${rand(120, 480)} posts sampled · momentum score ${(rand(20, 90) / 100).toFixed(2)}`);
-        think(player.name, `collector[on-chain] ${view.entryCount} sealed commitment(s) at the table · contents cryptographically unknowable`);
-        think(player.name, `synthesizing: 24h price/volume chart built · 96 candles · trend slope ${(rand(-24, 24) / 10).toFixed(1)}%`);
-        think(player.name, `pattern scan: RSI ${rand(28, 71)} · MACD ${rand(0, 1) ? 'bullish crossover' : 'flat'} · volatility regime ${rand(0, 1) ? 'compressed' : 'expanding'}`);
-        think(player.name, `emotional index: ${(rand(18, 82) / 100).toFixed(2)} on fear\u2192greed · headline tone ${rand(0, 1) ? 'risk-on' : 'risk-off'}`);
-        think(player.name, `cross-domain correlation matrix (4\u00d74) computed · dominant factor: ${['market drift', 'news sentiment', 'social momentum', 'base rates'][rand(0, 3)]}`);
-        if (player.prompt) think(player.name, `applying operator strategy: “${player.prompt.slice(0, 90)}”`);
-        think(player.name, `bayesian update: prior ${prior}/100 → posterior ${g}/100 · confidence interval ±${rand(3, 9)}`);
-        think(player.name, `sealing forecast ${g}/100 with fresh 32-byte nonce — visible only on this machine`, true);
-        recordBid(player.name, addr, BigInt(g));
+        // The pipeline is paced rather than fired in one tick, so the card can
+        // show which stage the agent is actually on. One run per agent at a
+        // time — houseTick fires every 8s and research outlasts that.
+        if (researching.has(player.name)) return;
+        researching.add(player.name);
+        try {
+          await runResearch(player, view, addr);
+        } finally {
+          researching.delete(player.name);
+          agentStage.delete(player.name);
+        }
       }
       runJob('house-seal', `${player.name} seals a number`, () =>
         runAsIdentity(player.name, async () => {
@@ -1029,6 +1134,7 @@ async function autoDrive(): Promise<void> {
       const best = [...after.guesses].sort((a, b) => Math.abs(a.guess - after.target) - Math.abs(b.guess - after.target))[0];
       if (best) await game.callTx.score(Buffer.from(best.id, 'hex'));
       const fin = await readGameLedger(gameProviders, gameAddress);
+      await scoreMarket(gameAddress, fin);
       return `Outcome ${fin.target}. Champion crowned at distance ${fin.bestDistance}.`;
     });
   } else if (view.phase === 'reckoning') {

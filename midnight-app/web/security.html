@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>How Sealed is secured — protocols, guarantees, and limits</title>
-<meta name="description" content="The protocol writeup: what Sealed proves in zero knowledge, how we verify it, and the limits we don't claim past.">
+<title>How Sealed is secured — protocols and guarantees</title>
+<meta name="description" content="The protocol writeup: what Sealed proves in zero knowledge, and how we verify it.">
 <meta name="theme-color" content="#14121f">
-<meta property="og:title" content="How Sealed is secured — protocols, guarantees, and limits">
-<meta property="og:description" content="The protocol writeup: what Sealed proves in zero knowledge, how we verify it, and the limits we don't claim past.">
+<meta property="og:title" content="How Sealed is secured — protocols and guarantees">
+<meta property="og:description" content="The protocol writeup: what Sealed proves in zero knowledge, and how we verify it.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Sealed">
 <meta name="twitter:card" content="summary">
@@ -32,8 +32,8 @@
 <section class="lot-banner">
   <p class="lot-eyebrow">The privacy boundary, protocol by protocol</p>
   <h1 class="lot-title">What the chain can and cannot learn</h1>
-  <p class="lot-privacy">Every claim below points at the line of code that enforces it. The limits section is
-  as load-bearing as the guarantees — a privacy system you cannot audit is a privacy system you cannot trust.</p>
+  <p class="lot-privacy">Every claim below points at the line of code that enforces it — a privacy system
+  you cannot audit is a privacy system you cannot trust.</p>
 </section>
 
 <main class="sec-page">
@@ -194,35 +194,6 @@ npm run test:intel   # detector calibration, incl. false-positive cases</code></
     </div>
   </article>
 
-  <!-- ─── Limits ───────────────────────────────────────────── -->
-  <article class="sec-layer sec-limits">
-    <div class="sec-num">!</div>
-    <div class="sec-body">
-      <h2>Limits — what this does <em>not</em> claim</h2>
-      <p>Stated plainly, because a hackathon demo that oversells its threat model is worse than one that
-      admits its edges.</p>
-      <ul class="sec-points">
-        <li><strong>The time-lock is not cryptographic time-lock encryption.</strong> There is no VDF and no
-        threshold committee. It is a commit-reveal gated on a committed tick plus a public counter, so a
-        seller who never opens the schedule stalls the auction. Real timelock encryption would remove that
-        liveness dependency.</li>
-        <li><strong>The tick counter is not a clock.</strong> It advances when someone calls
-        <code>tick()</code>; it is not block height or wall time.</li>
-        <li><strong>Combinatorial is fixed at three lots.</strong> Exhaustive winner determination is
-        tractable precisely because five partitions fit in a circuit. General combinatorial winner
-        determination is NP-hard and would need a different approach.</li>
-        <li><strong>Batch supply is capped at three units</strong> — the clearing ladder is three fixed
-        slots, insert-sorted on reveal.</li>
-        <li><strong>Bid metadata is public by design</strong>: who bid, in what order, and when. That is
-        what makes shill detection possible, and it is also a real fingerprinting surface. Unrevealed bids
-        forfeit rather than settling.</li>
-        <li><strong>No settlement layer.</strong> This proves who won and at what price; it does not move
-        funds or escrow them.</li>
-        <li><strong>The intelligence engines are explainable heuristics, not learned models</strong>, tuned
-        on synthetic fixtures. Treat the risk scores as prompts for a human, never as verdicts.</li>
-      </ul>
-    </div>
-  </article>
 
 </main>
 
