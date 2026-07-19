@@ -87,7 +87,7 @@ function drawHistogram(view) {
     t.style.left = view.target + '%';
     const label = document.createElement('span');
     label.className = 't-label';
-    label.textContent = '⅔·mean = ' + view.target;
+    label.textContent = (view.mode === 'oracle' ? 'outcome = ' : '⅔·mean = ') + view.target;
     t.appendChild(label);
     histo.appendChild(t);
   }
@@ -125,7 +125,6 @@ function render() {
 
   $('no-game-panel').hidden = Boolean(s.gameAddress);
   $('play-panel').hidden = !s.gameAddress;
-  $('new-game-button').disabled = jobActive || !s.ready;
 
   if (!v) {
     if (s.gameAddress) $('game-contract').textContent = short(s.gameAddress, 10);
@@ -241,7 +240,23 @@ $('guess-form').addEventListener('submit', (e) => {
   if (!guess) return;
   act({ type: 'game-seal', guess }).then((res) => { if (!res.error) input.value = ''; });
 });
-$('new-game-button').addEventListener('click', () => act({ type: 'game-new' }));
+const EVENTS = [
+  { q: 'Will BTC trade above its live price at resolution?', sub: 'Threshold fixed from live research at open · auto-resolved by the oracle agent', live: true },
+  { q: 'Will the Fed cut rates at the September FOMC?', sub: 'Opens with external oracle integrations', live: false },
+  { q: 'Will a US spot-Solana ETF be approved this year?', sub: 'Opens with external oracle integrations', live: false },
+  { q: 'Will 2026 be the hottest year on record?', sub: 'Opens with external oracle integrations', live: false },
+];
+const board = $('events-board');
+if (board) {
+  for (const ev of EVENTS) {
+    const node = document.getElementById('event-card-tpl').content.firstElementChild.cloneNode(true);
+    node.querySelector('.ev-q').textContent = ev.q;
+    node.querySelector('.ev-sub').textContent = ev.sub;
+    if (ev.live) node.addEventListener('click', () => act({ type: 'game-new', market: true }));
+    else { node.disabled = true; node.style.opacity = 0.45; }
+    board.appendChild(node);
+  }
+}
 $('reveal-guess-button').addEventListener('click', () => act({ type: 'game-reveal' }));
 $('close-sealing-button').addEventListener('click', () => act({ type: 'game-close' }));
 $('reckon-button').addEventListener('click', () => act({ type: 'game-reckon' }));

@@ -159,6 +159,8 @@ let bootError = '';
 let gameProviders: any;
 let game: any;
 let gameAddress = '';
+// Oracle-market event threshold, fixed at market creation from live research.
+let marketThreshold: number | null = null;
 
 let houseProviders: any;
 let house: any;
@@ -523,10 +525,16 @@ async function apiAction(body: any): Promise<any> {
       return { ok: true };
     }
     case 'game-new': {
-      const question = String(body?.question ?? '').trim().slice(0, 140) ||
+      const isMarket = Boolean(body?.market);
+      let question = String(body?.question ?? '').trim().slice(0, 140) ||
         'Guess a number from 1 to 100. Closest to two-thirds of the mean wins.';
-      runJob('game-new', 'Opening a new Number Game', async () => {
-        const addr = await deployGame(gameProviders, question);
+      if (isMarket) {
+        const signal = await observeMarket();
+        marketThreshold = Math.round(signal.priceUsd);
+        question = `Prediction market: will BTC trade above $${marketThreshold.toLocaleString()} at resolution? Seal 1 (certain no) … 100 (certain yes).`;
+      }
+      runJob('game-new', isMarket ? 'Opening a sealed prediction market' : 'Opening a new Number Game', async () => {
+        const addr = await deployGame(gameProviders, question, isMarket ? 1 : 0);
         recordGame(addr);
         gameAddress = addr;
         setActiveGame(addr);
@@ -569,8 +577,17 @@ async function apiAction(body: any): Promise<any> {
       runJob('game-reckon', 'Fixing the target and crowning the champion', async () => {
         const view = await readGameLedger(gameProviders, gameAddress);
         if (view.phase === 'reveal') {
-          const target = twoThirdsMean(view.revealedSum, view.revealedCount);
-          await game.callTx.lockTarget(BigInt(target));
+          if (view.mode === 'oracle') {
+            // The oracle is an agent: resolve the event from the same live
+            // public data the forecasters researched.
+            const signal = await observeMarket();
+            const threshold = marketThreshold ?? Math.round(signal.priceUsd);
+            const outcome = signal.priceUsd > threshold ? 100n : 1n;
+            await game.callTx.resolveOutcome(outcome);
+          } else {
+            const target = twoThirdsMean(view.revealedSum, view.revealedCount);
+            await game.callTx.lockTarget(BigInt(target));
+          }
         }
         const after = await readGameLedger(gameProviders, gameAddress);
         const best = [...after.guesses].sort(
@@ -1211,8 +1228,8 @@ const server = http.createServer(async (req, res) => {
       }
       return send(res, 200, JSON.stringify(await apiAction(body)));
     }
-    // Static files
-    let file = url.pathname === '/' ? '/index.html' : url.pathname;
+    // Static files — the prediction market is the front door.
+    let file = url.pathname === '/' ? '/game.html' : url.pathname;
     const resolved = path.resolve(WEB_ROOT, `.${file}`);
     if (!resolved.startsWith(WEB_ROOT) || !fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
       return send(res, 404, 'Not found', 'text/plain');

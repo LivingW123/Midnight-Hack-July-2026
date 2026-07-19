@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The Number Game — Sealed</title>
+<title>Sealed Markets — AI prediction markets on Midnight</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -116,12 +116,10 @@
 <header class="masthead">
   <div class="masthead-brand">
     <span class="seal-mark" aria-hidden="true"></span>
-    <span class="wordmark">Sealed</span>
-    <span class="tagline">the number game</span>
+    <span class="wordmark">Sealed Markets</span>
+    <span class="tagline">AI prediction markets — no odds to herd on</span>
   </div>
   <div class="masthead-net">
-    <a class="back" href="/">← the sealed auction</a>
-    <a class="nav-link" href="/house.html">auction house →</a>
     <a class="nav-link" href="/security.html">how it's secured →</a>
     <span class="net-dot" id="net-dot"></span>
     <span id="net-label">connecting…</span>
@@ -129,11 +127,9 @@
 </header>
 
 <section class="lot-banner">
-  <p class="lot-eyebrow">A game impossible on a transparent chain</p>
-  <h1 class="lot-title" id="game-question">The Number Game</h1>
-  <p class="rules">Everyone seals a number from <b>1 to 100</b>. When sealing closes, all numbers
-  are revealed and the target is fixed at <b>two-thirds of the mean</b>. Closest wins.
-  If guesses were public, the last player would simply compute the average — sealing is what makes it fair.</p>
+  <p class="lot-eyebrow">Markets impossible on a transparent chain</p>
+  <h1 class="lot-title" id="game-question">Sealed Markets</h1>
+  <p class="rules">AI agents seal independent forecasts (<b>1 = certain no … 100 = certain yes</b>) on a real event. No live odds exist, so nobody can herd or copy-trade; an oracle agent resolves from public data and the closest forecast wins.</p>
   <ol class="phase-rail phase-rail-4" id="phase-rail" aria-label="Game phase">
     <li data-phase="sealing"><span class="phase-tick"></span>Sealing</li>
     <li data-phase="reveal"><span class="phase-tick"></span>Reveals</li>
@@ -145,11 +141,17 @@
 <main class="game-main">
 
   <div class="panel" id="no-game-panel">
-    <h2 class="panel-title">No game at the table</h2>
-    <p class="field-help" style="margin:0 0 12px">Open one — you become the host, and five house players
-    with very different theories of other people's minds will join within the minute.</p>
-    <button class="btn btn-primary" id="new-game-button">Open a Number Game</button>
+    <h2 class="panel-title">Open a market</h2>
+    <p class="field-help" style="margin:0 0 14px">Pick an event. AI forecaster agents seal independent
+    predictions — there are no live odds to herd on — and an oracle agent resolves it from public data.</p>
+    <div id="events-board" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px"></div>
   </div>
+  <template id="event-card-tpl">
+    <button type="button" class="btn btn-ghost" style="text-align:left;padding:14px 16px;border-radius:10px;display:block;white-space:normal">
+      <span style="font-family:var(--serif);font-size:15px;display:block" class="ev-q"></span>
+      <span class="field-help ev-sub" style="display:block;margin-top:6px"></span>
+    </button>
+  </template>
 
   <div class="panel" id="play-panel" hidden>
     <h2 class="panel-title">Your number <span id="play-as" style="color:var(--dusk);font-family:var(--sans);font-size:12.5px;font-weight:400"></span></h2>

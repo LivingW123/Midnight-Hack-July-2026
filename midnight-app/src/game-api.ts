@@ -113,14 +113,14 @@ export async function createGameProviders(walletCtx: WalletContext, networkConfi
   };
 }
 
-export async function deployGame(providers: any, question: string): Promise<string> {
+export async function deployGame(providers: any, question: string, mode: 0 | 1 = 0): Promise<string> {
   const compiled = await makeCompiledGame();
   const MAX_RETRIES = 20;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       const deployed = await deployContract(providers, {
         compiledContract: compiled as any,
-        args: [question],
+        args: [question, mode],
         privateStateId: GAME_PRIVATE_STATE_ID,
         initialPrivateState: {},
       });
@@ -146,6 +146,7 @@ export async function connectGame(providers: any, contractAddress: string): Prom
 }
 
 export interface GameView {
+  mode: 'beauty' | 'oracle';
   phase: 'sealing' | 'reveal' | 'reckoning' | 'closed';
   question: string;
   owner: string;
@@ -175,6 +176,7 @@ export async function readGameLedger(providers: any, contractAddress: string): P
   const guesses: GameView['guesses'] = [];
   for (const [id, guess] of raw.guesses) guesses.push({ id: toHex(id), guess: Number(guess) });
   return {
+    mode: Number(raw.mode) === 1 ? 'oracle' : 'beauty',
     phase: PHASES[Number(raw.phase)] ?? 'closed',
     question: String(raw.question),
     owner: toHex(raw.owner),

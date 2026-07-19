@@ -13,7 +13,12 @@ import CompactStandardLibrary;
 // Unrevealed guesses forfeit, exactly like unrevealed auction bids.
 
 export enum Phase { sealing, reveal, reckoning, closed }
+// beauty: target = 2/3 of the mean (the game). oracle: target = a real-world
+// outcome the host posts after the fact — a sealed prediction market where
+// forecasts are provably independent (nobody can herd on odds that don't exist).
+export enum Mode { beauty, oracle }
 
+export ledger mode: Mode;
 export ledger phase: Phase;
 export ledger question: Opaque<"string">;
 export ledger owner: Bytes<32>;
@@ -34,8 +39,9 @@ witness localSecretKey(): Bytes<32>;
 witness guessValue(): Uint<64>;
 witness guessNonce(): Bytes<32>;
 
-constructor(gameQuestion: Opaque<"string">) {
+constructor(gameQuestion: Opaque<"string">, gameMode: Mode) {
   question = disclose(gameQuestion);
+  mode = disclose(gameMode);
   phase = Phase.sealing;
   owner = disclose(publicKey(localSecretKey()));
 }
@@ -83,7 +89,24 @@ export circuit revealGuess(): [] {
 //   3*count*target <= 2*sum < 3*count*(target + 1)
 // which pins target to exactly floor((2*sum) / (3*count)). Anyone may call
 // this — a wrong quotient simply cannot prove.
+// oracle mode: after reveals, the host posts the real-world outcome (1..100
+// scale) and the reckoning scores every forecast against it. Host-only —
+// but the outcome is public the moment it lands, so a lying host is
+// publicly, permanently wrong on their own market.
+export circuit resolveOutcome(outcome: Uint<64>): [] {
+  assert(mode == Mode.oracle, "not an oracle market");
+  assert(phase == Phase.reveal, "not in reveal phase");
+  assert(publicKey(localSecretKey()) == owner, "only the host can resolve");
+  assert(revealedCount > 0, "nothing revealed");
+  const o = disclose(outcome);
+  assert(o >= 1, "outcome below scale");
+  assert(o <= 100, "outcome above scale");
+  target = o;
+  phase = Phase.reckoning;
+}
+
 export circuit lockTarget(claimedTarget: Uint<64>): [] {
+  assert(mode == Mode.beauty, "oracle markets resolve via resolveOutcome");
   assert(phase == Phase.reveal, "not in reveal phase");
   assert(revealedCount > 0, "nothing revealed");
   const t = disclose(claimedTarget);
