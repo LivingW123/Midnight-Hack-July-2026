@@ -579,6 +579,11 @@ async function apiAction(body: any): Promise<any> {
       marketThreshold = null;
       return { ok: true };
     }
+    case 'agent-bid-now': {
+      // Fast-track every custom agent past its patience window.
+      for (const p of customPlayers) rivalDue.set(`${gameAddress}:${p.name}:sealing`, 0);
+      return { ok: true };
+    }
     case 'game-add-agent': {
       const raw = String(body?.name ?? '').trim().toLowerCase().replace(/[^a-z0-9- ]/g, '').replace(/\s+/g, '-').slice(0, 20);
       if (!raw) return { error: 'Name your agent first.' };
@@ -926,6 +931,7 @@ function allForecasters(): HousePlayer[] {
 
 const housePlans = new Map<string, number>();
 
+let autoDrove = 0;
 async function houseTick(): Promise<void> {
   if (!walletReady || activeJob || !gameAddress) return;
   let view: GameView;
@@ -970,7 +976,7 @@ async function houseTick(): Promise<void> {
     }
 
     if (view.phase === 'reveal' && sealed && !revealed && getBid(player.name, addr)) {
-      if (!rivalReady(key, [3_000, 14_000])) continue;
+      if (!rivalReady(key, [2_000, 8_000])) continue;
       runJob('house-reveal', `${player.name} reveals`, () =>
         runAsIdentity(player.name, async () => {
           if (addr !== gameAddress) return `${player.name} sat this one out.`;
@@ -989,8 +995,46 @@ async function houseTick(): Promise<void> {
   }
 }
 
+// The market drives itself: close when the table is full, resolve when all
+// reveals are in, finalize after the crowning. No host buttons needed.
+async function autoDrive(): Promise<void> {
+  if (!walletReady || activeJob || !gameAddress || Date.now() - autoDrove < 20_000) return;
+  let view: GameView;
+  try { view = await readGameLedger(gameProviders, gameAddress); } catch { return; }
+  const field = allForecasters().length;
+  if (view.phase === 'sealing' && view.entryCount >= field && view.entryCount > 0) {
+    autoDrove = Date.now();
+    runJob('game-close', 'The table is full — sealing closes', async () => {
+      await game.callTx.closeSealing();
+      return 'Sealing closed. Reveals begin — watch the histogram build.';
+    });
+  } else if (view.phase === 'reveal' && view.revealedCount >= view.entryCount && view.revealedCount > 0) {
+    autoDrove = Date.now();
+    runJob('game-reckon', 'Oracle resolving the event', async () => {
+      const v2 = await readGameLedger(gameProviders, gameAddress);
+      if (v2.phase === 'reveal') {
+        if (v2.mode === 'oracle') {
+          const signal = await observeMarket();
+          const threshold = marketThreshold ?? Math.round(signal.priceUsd);
+          await game.callTx.resolveOutcome(signal.priceUsd > threshold ? 100n : 1n);
+        } else {
+          await game.callTx.lockTarget(BigInt(twoThirdsMean(v2.revealedSum, v2.revealedCount)));
+        }
+      }
+      const after = await readGameLedger(gameProviders, gameAddress);
+      const best = [...after.guesses].sort((a, b) => Math.abs(a.guess - after.target) - Math.abs(b.guess - after.target))[0];
+      if (best) await game.callTx.score(Buffer.from(best.id, 'hex'));
+      const fin = await readGameLedger(gameProviders, gameAddress);
+      return `Outcome ${fin.target}. Champion crowned at distance ${fin.bestDistance}.`;
+    });
+  } else if (view.phase === 'reckoning') {
+    autoDrove = Date.now();
+    runJob('game-finalize', 'Gavel', async () => { await game.callTx.finalize(); return 'Market closed. Losing forecasts stay sealed forever.'; });
+  }
+}
+
 setInterval(() => {
-  houseTick().catch(() => {});
+  houseTick().then(() => autoDrive()).catch(() => {});
 }, 8_000);
 
 // ─── Sealed Desk — the fully agent-run market ─────────────────────────────────

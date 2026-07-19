@@ -109,7 +109,17 @@
   .champion-note .mono { font-size: 12px; }
 
   .phase-rail-4 li { padding: 0 14px; }
-  #guess-form, #sealed-number { display: none !important; }
+  #guess-form, #sealed-number, #play-panel .panel-title, #reveal-guess-button, #close-sealing-button, #reckon-button, #finalize-game-button, #resolve-yes-button, #resolve-no-button { display: none !important; }
+  .my-agent { border: 1px solid var(--wax); border-radius: 10px; padding: 13px 16px; margin-bottom: 12px; background: #fdfbf5; }
+  .my-agent .ma-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .my-agent .ma-name { font-family: var(--serif); font-weight: 600; font-size: 16px; color: var(--ink); }
+  .ma-side { font-family: var(--mono); font-weight: 700; font-size: 13px; border-radius: 6px; padding: 3px 10px; }
+  .ma-side.yes { background: #1e3a2c; color: #5fd694; } .ma-side.no { background: #3a2226; color: #f06a6a; }
+  .ma-amt { font-family: var(--mono); font-size: 13px; color: var(--ink); }
+  .ma-state { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--ink-soft); }
+  .chart-wrap { margin: 10px 0 4px; }
+  .chart-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-soft); font-family: var(--mono); margin-bottom: 4px; }
+  .chart-label .big { font-size: 22px; color: #12855e; font-weight: 700; }
 
   /* ── Paper theme: the whole market wears the table's white style ── */
   html { color-scheme: light; }
@@ -256,6 +266,7 @@
     </button>
   </template>
 
+  <div id="my-agents"></div>
   <div class="panel" id="play-panel" hidden>
     <h2 class="panel-title">Market controls <span id="play-as" style="color:var(--dusk);font-family:var(--sans);font-size:12.5px;font-weight:400"></span></h2>
 
@@ -306,6 +317,10 @@
       <div class="floor-panel" id="floor-panel" hidden>
         <p class="seats-label" style="color:var(--wax)">The floor — agents’ reasoning, local only</p>
         <div id="floor-log" class="floor-log"></div>
+      </div>
+      <div class="chart-wrap">
+        <div class="chart-label"><span><span class="big" id="chance-now">54%</span> chance</span><span id="chart-range">last hour</span></div>
+        <canvas id="chance-chart" width="900" height="140" style="width:100%;height:120px"></canvas>
       </div>
       <div class="floor-panel" style="margin-bottom:14px">
         <p class="seats-label">Live order flow · open interest <span class="mono" id="open-interest">—</span></p>

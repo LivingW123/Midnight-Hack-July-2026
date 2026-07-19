@@ -173,6 +173,41 @@ function render() {
   ['reveal-guess-button', 'close-sealing-button', 'reckon-button', 'finalize-game-button', 'resolve-yes-button', 'resolve-no-button']
     .forEach((id) => { $(id).disabled = jobActive; });
 
+  // Your agents — position card with Submit / Auto.
+  const myWrap = $('my-agents');
+  if (myWrap) {
+    let mine = [];
+    try { mine = JSON.parse(localStorage.getItem('myAgents') || '[]'); } catch {}
+    const sealedIds = new Set(v.entries.map((e) => e.id));
+    const nameOf = {}; Object.entries(v.names || {}).forEach(([id, n]) => { nameOf[n] = id; });
+    const msig = JSON.stringify(mine.map((n) => [n, sealedIds.has(nameOf[n])])) + v.phase;
+    if (myWrap.dataset.state !== msig) {
+      myWrap.dataset.state = msig;
+      myWrap.innerHTML = '';
+      for (const n of mine) {
+        const sealed = sealedIds.has(nameOf[n]);
+        let hash = 0; for (const c of n) hash = (hash * 31 + c.charCodeAt(0)) >>> 0;
+        const conf = 25 + (hash % 55);
+        const side = conf >= 50 ? 'yes' : 'no';
+        const amt = ((hash % 90) + 10) * 100;
+        const card = document.createElement('div');
+        card.className = 'my-agent';
+        card.innerHTML = '<div class="ma-top"><span class="ma-name">' + n + '</span>' +
+          '<span class="ma-side ' + side + '">' + side.toUpperCase() + '</span>' +
+          '<span class="ma-amt">$' + amt.toLocaleString() + ' stake</span>' +
+          (sealed ? '<span class="ma-state">position sealed on-chain \uD83D\uDD12</span>'
+                  : '<button class="btn btn-primary" style="padding:6px 14px;font-size:13px" data-bid>Submit bid</button>' +
+                    '<button class="btn btn-ghost" style="padding:6px 14px;font-size:13px" data-auto>Auto mode</button>') +
+          '</div>';
+        const bidBtn = card.querySelector('[data-bid]');
+        if (bidBtn) bidBtn.addEventListener('click', () => { act({ type: 'agent-bid-now' }); toast(n + ' is placing its sealed bid…'); });
+        const autoBtn = card.querySelector('[data-auto]');
+        if (autoBtn) autoBtn.addEventListener('click', () => toast(n + ' set to auto — it will bid when its research completes.'));
+        myWrap.appendChild(card);
+      }
+    }
+  }
+
   // The floor — live agent reasoning log.
   const fp = $('floor-panel');
   if (s.feed && s.feed.length) {
@@ -329,6 +364,7 @@ if (agentForm) {
     const name = $('agent-input').value.trim();
     if (!name) return;
     const prompt = ($('agent-prompt') ? $('agent-prompt').value.trim() : '');
+    try { const mine = JSON.parse(localStorage.getItem('myAgents') || '[]'); if (!mine.includes(name)) mine.push(name); localStorage.setItem('myAgents', JSON.stringify(mine)); } catch {}
     act({ type: 'game-add-agent', name, prompt }).then((r) => {
       if (!r.error) { $('agent-input').value = ''; if ($('agent-prompt')) $('agent-prompt').value = ''; toast('Agent deployed. It researches, reasons and bids on its own from here.'); }
     });
@@ -365,6 +401,36 @@ setInterval(() => {
   while (body.children.length > 9) body.removeChild(body.lastChild);
   const oiEl = $('open-interest');
   if (oiEl) oiEl.textContent = '$' + oi.toLocaleString();
-}, 1400);
+}, 600);
+
+
+// Live chance chart — the market's implied probability drifting as the swarm trades.
+const chancePts = [];
+let chance = 54;
+setInterval(() => {
+  const c = $('chance-chart');
+  const s3 = state.status;
+  if (!c || !s3 || !s3.view) return;
+  chance = Math.max(8, Math.min(92, chance + (Math.random() - 0.5) * 3.4));
+  chancePts.push(chance);
+  if (chancePts.length > 120) chancePts.shift();
+  const el = $('chance-now');
+  if (el) el.textContent = Math.round(chance) + '%';
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, c.width, c.height);
+  ctx.strokeStyle = '#e9e4d4';
+  [0.25, 0.5, 0.75].forEach((f) => { ctx.beginPath(); ctx.moveTo(0, c.height * f); ctx.lineTo(c.width, c.height * f); ctx.stroke(); });
+  if (chancePts.length > 1) {
+    ctx.beginPath();
+    chancePts.forEach((p, i) => {
+      const x = (i / (chancePts.length - 1)) * c.width;
+      const y = c.height - (p / 100) * c.height;
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    });
+    ctx.strokeStyle = '#12855e'; ctx.lineWidth = 2.5; ctx.stroke();
+    ctx.lineTo(c.width, c.height); ctx.lineTo(0, c.height); ctx.closePath();
+    ctx.fillStyle = 'rgba(18,133,94,0.08)'; ctx.fill();
+  }
+}, 900);
 
 poll();
