@@ -46,6 +46,22 @@ import {
   twoThirdsMean,
   type GameView,
 } from './game-api';
+import {
+  createHouseProviders,
+  deployHouse,
+  connectHouse,
+  readHouseLedger,
+  setActiveHouse,
+  recordHouse,
+  listHouses,
+  housePublicKeyHex,
+  bundleLabel,
+  FORMATS,
+  FORMAT_META,
+  type FormatName,
+  type HouseView,
+} from './house-api';
+import { observeBid, observeSettlement, detectShills, adviseReserve, allBids } from './intel';
 
 // @ts-expect-error Required for wallet sync
 globalThis.WebSocket = WebSocket;
@@ -130,6 +146,12 @@ let gameProviders: any;
 let game: any;
 let gameAddress = '';
 
+let houseProviders: any;
+let house: any;
+let houseAddress = '';
+/** When the currently-viewed house was first observed, for demand velocity. */
+let houseOpenedAt = 0;
+
 async function boot() {
   const deployment = getDeployment(network);
   if (!deployment) {
@@ -159,6 +181,21 @@ async function boot() {
       console.log(`  Number Game: ${gameAddress}`);
     } catch (err: any) {
       console.log(`  (recorded Number Game unreachable: ${err?.message ?? err})`);
+    }
+  }
+
+  houseProviders = await createHouseProviders(walletCtx, networkConfig);
+  const houses = listHouses();
+  const lastHouse = houses[houses.length - 1];
+  if (lastHouse) {
+    try {
+      setActiveHouse(lastHouse.address);
+      house = await connectHouse(houseProviders, lastHouse.address);
+      houseAddress = lastHouse.address;
+      houseOpenedAt = Date.parse(lastHouse.at) || Date.now();
+      console.log(`  Auction House: ${houseAddress} (${lastHouse.format})`);
+    } catch (err: any) {
+      console.log(`  (recorded Auction House unreachable: ${err?.message ?? err})`);
     }
   }
 
@@ -263,6 +300,140 @@ async function apiGameStatus(): Promise<any> {
       startedAt: job.startedAt, ok: job.ok ?? null, message: job.message ?? null,
     },
   };
+}
+
+/** Pseudonym → local label, for the ids this machine happens to know. */
+async function knownNames(): Promise<Record<string, string>> {
+  const names = [...new Set([...listIdentities(), currentIdentity().name])];
+  return Object.fromEntries(
+    await Promise.all(names.map(async (n) => [await housePublicKeyHex(getOrCreateIdentity(n).secretKey), n])),
+  );
+}
+
+/**
+ * Feed the intelligence engines from public state only. Everything recorded
+ * here is already visible to any indexer: who bid, in what order, when we
+ * first saw it, and whether they ever opened. No amount is passed in — the
+ * detector could not use one even if we had it.
+ */
+async function observeHouse(view: HouseView, names: Record<string, string>): Promise<void> {
+  const revealedIds = new Set<string>();
+  for (const s of view.slots) if (s.winner) revealedIds.add(s.winner);
+  for (const b of view.bundles) if (b.winner) revealedIds.add(b.winner);
+  if (view.winner) revealedIds.add(view.winner);
+
+  for (const b of view.bids) {
+    observeBid({
+      house: houseAddress,
+      format: view.format,
+      bidderId: b.bidderId,
+      paddle: names[b.bidderId],
+      index: b.index,
+      // A bid counts as opened once it has surfaced in a revealed position.
+      // Under-counting here only ever makes the detector more forgiving.
+      revealed: revealedIds.has(b.bidderId),
+      isSeller: b.bidderId === view.owner,
+    });
+  }
+  if (view.phase === 'closed' && view.winner) {
+    observeSettlement({
+      house: houseAddress,
+      format: view.format,
+      item: view.item,
+      clearingPrice: (view.clearingLocked ? view.clearingPrice : view.highestBid).toString(),
+      bidders: view.bidderCount,
+    });
+  }
+}
+
+async function apiHouseStatus(): Promise<any> {
+  const me = currentIdentity();
+  const myId = await housePublicKeyHex(me.secretKey).catch(() => '');
+  let view: HouseView | null = null;
+  let viewError = '';
+  if (walletReady && houseAddress) {
+    try {
+      view = await readHouseLedger(houseProviders, houseAddress);
+    } catch (err: any) {
+      viewError = err?.message ?? String(err);
+    }
+  }
+
+  const names = await knownNames();
+  if (view) await observeHouse(view, names);
+
+  const myBid = houseAddress ? getBid(me.name, houseAddress) ?? null : null;
+  const job = activeJob ?? lastJob;
+
+  return {
+    ready: walletReady,
+    bootError,
+    network,
+    houseAddress,
+    formats: FORMATS.map((f) => FORMAT_META[f]),
+    houses: listHouses(),
+    identity: {
+      name: me.name,
+      onChainId: myId,
+      bid: myBid ? { amount: myBid.amount, bundle: myBid.bundle ?? '0' } : null,
+    },
+    identities: listIdentities().filter((n) => !n.startsWith('e2e-')),
+    view: view && {
+      ...view,
+      highestBid: view.highestBid.toString(),
+      currentPrice: view.currentPrice.toString(),
+      floorPrice: view.floorPrice.toString(),
+      priceStep: view.priceStep.toString(),
+      clearingPrice: view.clearingPrice.toString(),
+      allocationValue: view.allocationValue.toString(),
+      slots: view.slots.map((s) => ({ ...s, price: s.price.toString() })),
+      bundles: view.bundles.map((b) => ({ ...b, best: b.best.toString(), label: bundleLabel(b.mask) })),
+      allocationLabels: view.allocation.map(bundleLabel),
+      isSeller: view.owner === myId,
+      isWinner: view.winner !== null && view.winner === myId,
+      hasMyBid: view.bids.some((b) => b.bidderId === myId),
+      names,
+    },
+    viewError,
+    job: job && {
+      id: job.id, kind: job.kind, label: job.label, stage: job.stage,
+      startedAt: job.startedAt, ok: job.ok ?? null, message: job.message ?? null,
+    },
+  };
+}
+
+/**
+ * Fraud scoring and reserve advice for the active house. Deliberately a
+ * separate endpoint: it is derived analysis, not chain state, and the UI
+ * labels it as such.
+ */
+async function apiIntel(): Promise<any> {
+  if (!houseAddress) return { findings: [], advice: null, ready: false };
+  let view: HouseView | null = null;
+  try {
+    view = await readHouseLedger(houseProviders, houseAddress);
+  } catch {
+    return { findings: [], advice: null, ready: false };
+  }
+  const names = await knownNames();
+  await observeHouse(view, names);
+
+  const findings = detectShills(houseAddress).map((f) => ({ ...f, paddle: f.paddle ?? names[f.bidderId] }));
+
+  // First-seen timestamps live in the intel store; the ledger has arrival
+  // order but no clock, so this is the only place a real gap can come from.
+  const seen = allBids().filter((b) => b.house === houseAddress);
+  const lastBidAt = seen.length ? Math.max(...seen.map((b) => b.at)) : null;
+  const advice = adviseReserve({
+    format: view.format,
+    bidders: view.bidderCount,
+    age: Date.now() - (houseOpenedAt || Date.now()),
+    sinceLastBid: lastBidAt === null ? null : Date.now() - lastBidAt,
+    currentPrice: view.currentPrice,
+    floorPrice: view.floorPrice,
+  });
+
+  return { ready: true, findings, advice, phase: view.phase, format: view.format };
 }
 
 async function apiAction(body: any): Promise<any> {
@@ -398,6 +569,147 @@ async function apiAction(body: any): Promise<any> {
       });
       return { ok: true };
     }
+
+    // ── Auction House ────────────────────────────────────────────────────
+    case 'house-new': {
+      const item = String(body?.item ?? '').trim().slice(0, 120);
+      if (!item) return { error: 'Describe the lot first.' };
+      const format = String(body?.format ?? 'firstPrice') as FormatName;
+      if (!FORMATS.includes(format)) return { error: `Unknown format: ${format}` };
+
+      const num = (v: any, fallback: bigint): bigint => {
+        const s = String(v ?? '').replace(/[,_\s]/g, '');
+        return /^[0-9]+$/.test(s) ? BigInt(s) : fallback;
+      };
+      const startPrice = num(body?.startPrice, 1000n);
+      const floorPrice = num(body?.floorPrice, 100n);
+      const priceStep = num(body?.priceStep, 100n);
+      const supply = num(body?.supply, 2n);
+      const scheduleTick = num(body?.scheduleTick, 1n);
+
+      if (format === 'dutch' && floorPrice >= startPrice) {
+        return { error: 'The floor must sit below the opening price.' };
+      }
+      if (format === 'dutch' && priceStep === 0n) return { error: 'The price step must be above zero.' };
+      if (format === 'batch' && (supply < 1n || supply > 3n)) return { error: 'Batch supply is 1 to 3 units.' };
+
+      runJob('house-new', `Opening a ${FORMAT_META[format].title} auction`, async () => {
+        const addr = await deployHouse(houseProviders, {
+          item, format, startPrice, floorPrice, priceStep, supply, scheduleTick,
+        });
+        recordHouse(addr, format);
+        setActiveHouse(addr);
+        house = await connectHouse(houseProviders, addr);
+        houseAddress = addr;
+        houseOpenedAt = Date.now();
+        return `${FORMAT_META[format].title} auction open — ${FORMAT_META[format].blurb}`;
+      });
+      return { ok: true };
+    }
+    case 'house-open': {
+      const addr = String(body?.address ?? '');
+      if (!listHouses().some((h) => h.address === addr)) return { error: 'Unknown auction.' };
+      runJob('house-open', 'Opening auction', async () => {
+        setActiveHouse(addr);
+        house = await connectHouse(houseProviders, addr);
+        houseAddress = addr;
+        houseOpenedAt = Date.parse(listHouses().find((h) => h.address === addr)!.at) || Date.now();
+        return 'Auction opened.';
+      });
+      return { ok: true };
+    }
+    case 'house-bid': {
+      if (!houseAddress) return { error: 'No auction open — start one first.' };
+      const amount = String(body?.amount ?? '').replace(/[,_\s]/g, '');
+      if (!/^[0-9]+$/.test(amount) || BigInt(amount) <= 0n) return { error: 'Enter a whole number above zero.' };
+      const view = await readHouseLedger(houseProviders, houseAddress);
+      let bundle = 0n;
+      if (view.format === 'combinatorial') {
+        bundle = BigInt(String(body?.bundle ?? '0'));
+        if (bundle < 1n || bundle > 7n) return { error: 'Pick at least one lot for your bundle.' };
+      }
+      recordBid(me.name, houseAddress, BigInt(amount), bundle);
+      const what = view.format === 'dutch' ? 'reservation price' : 'bid';
+      runJob('house-bid', `Sealing ${me.name}'s ${what}`, async () => {
+        await house.callTx.placeBid();
+        return view.format === 'dutch'
+          ? 'Reservation sealed. The chain cannot tell what you are willing to pay — only that you are in.'
+          : 'Bid sealed. Only its commitment went on-chain.';
+      });
+      return { ok: true };
+    }
+    case 'house-tick': {
+      runJob('house-tick', 'Advancing the clock', async () => {
+        await house.callTx.tick();
+        const v = await readHouseLedger(houseProviders, houseAddress);
+        return v.format === 'dutch' ? `Price stepped down to ${v.currentPrice}.` : `Clock advanced to tick ${v.tickCount}.`;
+      });
+      return { ok: true };
+    }
+    case 'house-claim': {
+      if (!getBid(me.name, houseAddress)) return { error: `${me.name} has no sealed reservation here.` };
+      runJob('house-claim', `Proving ${me.name}'s reservation clears the price`, async () => {
+        await house.callTx.claimAtCurrentPrice();
+        const v = await readHouseLedger(houseProviders, houseAddress);
+        return `Claimed at ${v.currentPrice}. Your reservation price never left this machine.`;
+      });
+      return { ok: true };
+    }
+    case 'house-close': {
+      runJob('house-close', 'Closing bidding', async () => {
+        await house.callTx.closeBidding();
+        return 'Bidding closed. Reveals begin.';
+      });
+      return { ok: true };
+    }
+    case 'house-open-schedule': {
+      runJob('house-open-schedule', 'Opening the committed schedule', async () => {
+        await house.callTx.openSchedule();
+        const v = await readHouseLedger(houseProviders, houseAddress);
+        return v.format === 'candle'
+          ? `The candle went out after bid #${v.scheduleTick + 1}. Committed before the first bid — it could not have been moved.`
+          : `Unlock tick ${v.scheduleTick} revealed. Reveals open once the clock passes it.`;
+      });
+      return { ok: true };
+    }
+    case 'house-reveal': {
+      if (!getBid(me.name, houseAddress)) return { error: `${me.name} has no sealed bid here.` };
+      const view = await readHouseLedger(houseProviders, houseAddress);
+      const call =
+        view.format === 'batch' ? 'revealForBatch' : view.format === 'combinatorial' ? 'revealBundle' : 'revealBid';
+      runJob('house-reveal', `Revealing ${me.name}'s bid in zero knowledge`, async () => {
+        await house.callTx[call]();
+        return 'Reveal verified against your sealed commitment.';
+      });
+      return { ok: true };
+    }
+    case 'house-settle': {
+      const view = await readHouseLedger(houseProviders, houseAddress);
+      if (view.format === 'batch') {
+        runJob('house-settle', 'Locking the uniform clearing price', async () => {
+          await house.callTx.lockClearingPrice();
+          const v = await readHouseLedger(houseProviders, houseAddress);
+          return `Cleared at ${v.clearingPrice} — every winner pays the same price.`;
+        });
+      } else if (view.format === 'combinatorial') {
+        runJob('house-settle', 'Proving the optimal allocation', async () => {
+          await house.callTx.lockAllocation();
+          const v = await readHouseLedger(houseProviders, houseAddress);
+          return `Optimal allocation ${v.allocation.map(bundleLabel).join(' + ')} at ${v.allocationValue} — proven against all five partitions.`;
+        });
+      } else {
+        return { error: 'This format settles on reveal — nothing to lock.' };
+      }
+      return { ok: true };
+    }
+    case 'house-finalize': {
+      runJob('house-finalize', 'Bringing down the gavel', async () => {
+        await house.callTx.finalize();
+        return 'Gavel down. The auction is closed.';
+      });
+      return { ok: true };
+    }
+
     default:
       return { error: `Unknown action: ${type}` };
   }
@@ -598,6 +910,12 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === '/api/game-status' && req.method === 'GET') {
       return send(res, 200, JSON.stringify(await apiGameStatus()));
+    }
+    if (url.pathname === '/api/house-status' && req.method === 'GET') {
+      return send(res, 200, JSON.stringify(await apiHouseStatus()));
+    }
+    if (url.pathname === '/api/intel' && req.method === 'GET') {
+      return send(res, 200, JSON.stringify(await apiIntel()));
     }
     if (url.pathname === '/api/action' && req.method === 'POST') {
       const chunks: Buffer[] = [];

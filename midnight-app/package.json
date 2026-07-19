@@ -19,7 +19,8 @@
     "clean": "rm -rf contracts/managed .midnight-state.json .midnight-wallet-state",
     "test": "echo \"Error: no test specified\" && exit 1",
     "test:e2e": "tsx scripts/e2e-check.ts",
-    "test:house": "tsx scripts/house-e2e.ts"
+    "test:house": "tsx scripts/house-e2e.ts",
+    "test:intel": "tsx scripts/intel-check.ts"
   },
   "dependencies": {
     "@midnight-ntwrk/compact-runtime": "0.16.0",
