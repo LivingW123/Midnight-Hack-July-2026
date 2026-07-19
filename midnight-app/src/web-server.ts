@@ -926,7 +926,9 @@ const HOUSE_PLAYERS: HousePlayer[] = [
 // players; the user names them and they trade on their own.
 const customPlayers: HousePlayer[] = [];
 function allForecasters(): HousePlayer[] {
-  return [...HOUSE_PLAYERS, ...customPlayers];
+  // Markets are traded only by agents the user deploys — the built-in
+  // ai-bidders stay benched.
+  return [...customPlayers];
 }
 
 const housePlans = new Map<string, number>();

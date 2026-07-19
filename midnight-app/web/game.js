@@ -184,6 +184,17 @@ function render() {
     if (myWrap.dataset.state !== msig) {
       myWrap.dataset.state = msig;
       myWrap.innerHTML = '';
+      if (mine.length === 0) {
+        myWrap.innerHTML = '<div class="my-agent"><div class="ma-top">' +
+          '<input id="quick-agent" placeholder="name your agent (e.g. my-quant)" style="flex:1;min-width:160px;border:1px solid var(--paper-line);border-radius:8px;padding:8px 11px;font:inherit;font-size:13px">' +
+          '<button class="btn btn-primary" style="padding:7px 16px;font-size:13px" id="quick-deploy">Deploy agent &amp; start bidding</button></div></div>';
+        $('quick-deploy').addEventListener('click', () => {
+          const n = $('quick-agent').value.trim();
+          if (!n) return;
+          try { const m = JSON.parse(localStorage.getItem('myAgents') || '[]'); if (!m.includes(n)) m.push(n); localStorage.setItem('myAgents', JSON.stringify(m)); } catch {}
+          act({ type: 'game-add-agent', name: n }).then(() => act({ type: 'agent-bid-now' }));
+        });
+      }
       for (const n of mine) {
         const sealed = sealedIds.has(nameOf[n]);
         let hash = 0; for (const c of n) hash = (hash * 31 + c.charCodeAt(0)) >>> 0;
