@@ -1,0 +1,114 @@
+/* Sealed — security page styles.
+   Kept out of styles.css because this page is a standalone essay: it shares
+   the design tokens but none of the auction chrome. */
+
+/* ─── Security page ────────────────────────────────────────── */
+
+.sec-page { max-width: 860px; margin: 0 auto; padding: 10px 28px 60px; }
+.sec-layer {
+  display: grid;
+  grid-template-columns: 58px 1fr;
+  gap: 18px;
+  padding: 26px 0;
+  border-top: 1px solid var(--night-line);
+  animation: cardIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+/* Progressive reveal down the page, without needing JS. */
+.sec-layer:nth-child(1) { animation-delay: 0ms; }
+.sec-layer:nth-child(2) { animation-delay: 70ms; }
+.sec-layer:nth-child(3) { animation-delay: 140ms; }
+.sec-layer:nth-child(4) { animation-delay: 210ms; }
+.sec-layer:nth-child(5) { animation-delay: 280ms; }
+.sec-layer:nth-child(6) { animation-delay: 350ms; }
+.sec-layer:nth-child(7) { animation-delay: 420ms; }
+.sec-layer:nth-child(n+8) { animation-delay: 490ms; }
+
+.sec-num {
+  font-family: var(--serif);
+  font-size: 1.5rem;
+  color: var(--lamplight);
+  opacity: 0.5;
+  line-height: 1;
+  padding-top: 3px;
+}
+.sec-body h2 {
+  font-family: var(--serif);
+  font-size: 1.3rem;
+  font-weight: 500;
+  margin-bottom: 10px;
+}
+.sec-body p { color: var(--dusk); line-height: 1.65; margin-bottom: 11px; font-size: 0.93rem; }
+.sec-body strong { color: var(--moon); font-weight: 600; }
+.sec-body em { color: var(--lamplight); font-style: italic; }
+.sec-body code {
+  font-family: var(--mono);
+  font-size: 0.86em;
+  color: var(--lamplight);
+  background: var(--night-raised);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+.sec-points { list-style: none; margin: 0 0 11px; }
+.sec-points li {
+  color: var(--dusk);
+  line-height: 1.6;
+  font-size: 0.9rem;
+  padding-left: 16px;
+  margin-bottom: 8px;
+  position: relative;
+}
+.sec-points li::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 9px;
+  width: 5px; height: 5px;
+  background: var(--lamplight);
+  opacity: 0.6;
+  transform: rotate(45deg);
+}
+.sec-code {
+  background: #100e18;
+  border: 1px solid var(--night-line);
+  border-left: 3px solid var(--lamplight);
+  border-radius: 5px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  margin-bottom: 11px;
+}
+.sec-code code {
+  background: none;
+  padding: 0;
+  color: #c9c3dd;
+  font-size: 0.82rem;
+  line-height: 1.65;
+  white-space: pre;
+}
+.sec-code.sec-error { border-left-color: var(--wax); }
+.sec-code.sec-error code { color: #d8a49c; }
+.sec-where {
+  font-family: var(--mono);
+  font-size: 0.76rem !important;
+  color: var(--dusk);
+  opacity: 0.7;
+}
+.sec-verify .sec-num { color: #5fa87a; opacity: 0.8; }
+.sec-limits { border-top-color: var(--wax); }
+.sec-limits .sec-num { color: var(--wax); opacity: 0.9; }
+.sec-footer {
+  text-align: center;
+  padding: 0 28px 40px;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--dusk);
+  opacity: 0.6;
+}
+
+@media (max-width: 880px) {
+  .sec-page { padding: 10px 0 40px; }
+  .sec-layer { grid-template-columns: 34px 1fr; gap: 12px; }
+}
+
+@media (max-width: 880px) {
+  .floor { padding: 20px 0 0; }
+  .format-rack { grid-template-columns: 1fr; }
+}

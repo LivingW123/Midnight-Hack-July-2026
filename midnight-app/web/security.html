@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How Sealed is secured — protocols, guarantees, and limits</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/security.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='13' fill='%2393332B'/><path d='M10 16.5l4 4 8-9' stroke='%23F6F3EA' stroke-width='2.5' fill='none'/></svg>">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-brand">
+    <span class="seal-mark" aria-hidden="true"></span>
+    <span class="wordmark">Sealed</span>
+    <span class="tagline">how it's secured</span>
+  </div>
+  <nav class="masthead-net">
+    <a class="nav-link" href="/">first-price →</a>
+    <a class="nav-link" href="/house.html">auction house →</a>
+    <a class="nav-link" href="/game.html">number game →</a>
+  </nav>
+</header>
+
+<section class="lot-banner">
+  <p class="lot-eyebrow">The privacy boundary, protocol by protocol</p>
+  <h1 class="lot-title">What the chain can and cannot learn</h1>
+  <p class="lot-privacy">Every claim below points at the line of code that enforces it. The limits section is
+  as load-bearing as the guarantees — a privacy system you cannot audit is a privacy system you cannot trust.</p>
+</section>
+
+<main class="sec-page">
+
+  <!-- ─── Layer 1: commitments ─────────────────────────────── -->
+  <article class="sec-layer">
+    <div class="sec-num">01</div>
+    <div class="sec-body">
+      <h2>Hiding &amp; binding commitments</h2>
+      <p>A bid never goes on-chain. What goes on-chain is
+      <code>persistentCommit([amount, bundleMask], nonce)</code> — a commitment built from the Compact
+      standard library, with a fresh 32-byte nonce drawn per bid.</p>
+      <ul class="sec-points">
+        <li><strong>Hiding</strong> — the commitment reveals nothing about the amount. Two bids of the same
+        value produce completely different commitments, because the nonce differs.</li>
+        <li><strong>Binding</strong> — a bidder cannot later "open" the commitment to a different number.
+        The reveal circuit recomputes the commitment from the witness and compares.</li>
+        <li>The nonce is written to local disk <em>before</em> the transaction is sent, so a crash between
+        commit and reveal can never strand an unopenable bid.</li>
+      </ul>
+      <pre class="sec-code"><code>const commitment = bidCommitment(amount, bundle, bidNonce());
+assert(bids.lookup(id) == commitment, "does not open the sealed bid");</code></pre>
+      <p class="sec-where">contracts/auction-house.compact — <code>bidCommitment</code>, <code>revealBid</code></p>
+    </div>
+  </article>
+
+  <!-- ─── Layer 2: disclose ────────────────────────────────── -->
+  <article class="sec-layer">
+    <div class="sec-num">02</div>
+    <div class="sec-body">
+      <h2>Compiler-enforced declassification</h2>
+      <p>This is the guarantee that does the most work, and it is the one people find hardest to believe:
+      <strong>the Compact compiler refuses to build a contract that leaks a private value by accident.</strong>
+      Any path from a witness to the ledger must be marked <code>disclose(...)</code> explicitly.</p>
+      <p>That is not a lint. It is a compile error, and we hit it building this project — the first version
+      of the constructor assigned the format parameter straight to the ledger:</p>
+      <pre class="sec-code sec-error"><code>Exception: auction-house.compact line 20 char 10:
+  potential witness-value disclosure must be declared but is not:
+    witness value potentially disclosed:
+      the value of parameter fmt of the constructor
+    nature of the disclosure:
+      ledger operation might disclose the witness value</code></pre>
+      <p>Privacy here is therefore not a property of careful coding. It is a property the toolchain will not
+      let you violate silently — you have to write the word <code>disclose</code> and mean it.</p>
+    </div>
+  </article>
+
+  <!-- ─── Layer 3: the ZK claim ────────────────────────────── -->
+  <article class="sec-layer">
+    <div class="sec-num">03</div>
+    <div class="sec-body">
+      <h2>Proving a fact without revealing the value</h2>
+      <p>The Dutch auction is where zero knowledge earns its keep. A bidder proves their sealed reservation
+      price clears the public clock price — and the circuit contains <em>no</em> <code>disclose()</code> on
+      that amount anywhere.</p>
+      <pre class="sec-code"><code>assert(bids.lookup(id) == bidCommitment(amount, bundle, bidNonce()));
+// private >= public. Nothing about `amount` is declassified.
+assert(amount &gt;= currentPrice, "reservation price is below the current price");
+winner = id;
+highestBid = currentPrice;  // the CLOCK price is public; the bid is not</code></pre>
+      <p>The chain learns exactly one bit that it needed: someone was willing to pay at least the current
+      price. It does not learn how much more they would have paid — so the winner's true demand survives
+      the sale, and the seller cannot price-discriminate against them next time.</p>
+      <p class="sec-where">contracts/auction-house.compact — <code>claimAtCurrentPrice</code></p>
+    </div>
+  </article>
+
+  <!-- ─── Layer 4: witnesses stay home ─────────────────────── -->
+  <article class="sec-layer">
+    <div class="sec-num">04</div>
+    <div class="sec-body">
+      <h2>Local proving — secrets never cross the network</h2>
+      <p>Witness functions are called by Midnight.js during proof generation, on this machine. Their return
+      values become private circuit inputs and are never serialised into a transaction.</p>
+      <ul class="sec-points">
+        <li>The proof server runs at <code>http://127.0.0.1:6300</code> — loopback, not a hosted service.</li>
+        <li>Secret keys, bid amounts, nonces and schedule secrets live in a local identity store, not in
+        contract state.</li>
+        <li>Private state at rest goes through an encrypted store with a password provider; the default is
+        a devnet placeholder and <code>PRIVATE_STATE_PASSWORD</code> overrides it for anything real.</li>
+      </ul>
+      <p class="sec-where">src/house-api.ts — <code>witnesses()</code>, <code>createHouseProviders</code></p>
+    </div>
+  </article>
+
+  <!-- ─── Layer 5: identity ────────────────────────────────── -->
+  <article class="sec-layer">
+    <div class="sec-num">05</div>
+    <div class="sec-body">
+      <h2>Domain-separated pseudonymous identity</h2>
+      <p>An on-chain identity is <code>persistentHash([pad(32, "sealed:pk:"), secretKey])</code>. The domain
+      tag matters: it means a hash from this application can never be confused with, or replayed into, a hash
+      built for another purpose — even one using the same secret.</p>
+      <p>Ownership checks compare a freshly derived key against the stored owner, so "only the seller may
+      close" is enforced by a proof of key possession rather than by a transaction sender field.</p>
+      <pre class="sec-code"><code>assert(publicKey(localSecretKey()) == owner, "only the seller can close bidding");</code></pre>
+    </div>
+  </article>
+
+  <!-- ─── Layer 6: mechanism integrity ─────────────────────── -->
+  <article class="sec-layer">
+    <div class="sec-num">06</div>
+    <div class="sec-body">
+      <h2>Mechanism integrity</h2>
+      <p>Privacy is not enough on its own — a sealed auction also has to be provably <em>fair</em>.</p>
+      <ul class="sec-points">
+        <li><strong>Candle:</strong> the secret end-index is committed in the constructor, before a single
+        bid exists. The seller physically cannot move the close to exclude a bid they dislike, because
+        <code>openSchedule</code> verifies the opening against that commitment.</li>
+        <li><strong>Combinatorial:</strong> <code>lockAllocation</code> enumerates all five partitions of the
+        three lots inside the circuit and takes the maximum. The winning allocation is <em>proven</em>
+        revenue-optimal, not asserted by the seller.</li>
+        <li><strong>Batch:</strong> uniform clearing at the lowest winning bid removes the incentive to snipe
+        — everyone pays the same price regardless of arrival time.</li>
+        <li><strong>Replay &amp; double-bid:</strong> map membership makes one sealed bid per identity per
+        auction structural, not a convention.</li>
+        <li><strong>Phase guards:</strong> every circuit asserts its phase, so a late bid or an early reveal
+        cannot prove at all.</li>
+      </ul>
+    </div>
+  </article>
+
+  <!-- ─── Layer 7: fraud detection without deanonymisation ── -->
+  <article class="sec-layer">
+    <div class="sec-num">07</div>
+    <div class="sec-body">
+      <h2>Fraud detection that cannot become a back door</h2>
+      <p>Shill detection normally works by reading bid amounts and increments. Here that is impossible —
+      the values are sealed from us too. So the detector scores only metadata the ledger already publishes:
+      arrival order, first-seen timing, whether a sealed bid was ever opened, and cross-auction overlap.</p>
+      <p>This is a stronger position than it first appears. A fraud system that needs plaintext bids is a
+      fraud system that becomes a surveillance tool the moment it is compromised. This one has nothing extra
+      to leak — its input is public by construction, and its
+      <code>BidEvent</code> type carries no amount field at all.</p>
+      <p class="sec-where">src/intel.ts — <code>BidEvent</code>, <code>detectShills</code></p>
+    </div>
+  </article>
+
+  <!-- ─── Verification ─────────────────────────────────────── -->
+  <article class="sec-layer sec-verify">
+    <div class="sec-num">✓</div>
+    <div class="sec-body">
+      <h2>Verified, not asserted</h2>
+      <p>The privacy claim is tested adversarially rather than assumed. The e2e suites flatten
+      <em>everything</em> the indexer exposes — raw serialised contract state plus the parsed ledger — into
+      one string, and search it for each bid amount in three encodings (big-endian hex, little-endian hex,
+      and decimal).</p>
+      <ul class="sec-points">
+        <li>Amounts are chosen so their byte encodings cannot appear by coincidence.</li>
+        <li>In the first-price suite the eventual <em>winner reveals first</em>, so every later reveal is a
+        losing reveal — the worst case for leakage.</li>
+        <li>The Dutch suite asserts the winner's reservation price is absent from chain state both before
+        the claim and <strong>after winning</strong>.</li>
+      </ul>
+      <pre class="sec-code"><code>npm run test:e2e     # sealed first-price: correctness + privacy
+npm run test:house   # dutch, batch, candle, combinatorial
+npm run test:intel   # detector calibration, incl. false-positive cases</code></pre>
+    </div>
+  </article>
+
+  <!-- ─── Limits ───────────────────────────────────────────── -->
+  <article class="sec-layer sec-limits">
+    <div class="sec-num">!</div>
+    <div class="sec-body">
+      <h2>Limits — what this does <em>not</em> claim</h2>
+      <p>Stated plainly, because a hackathon demo that oversells its threat model is worse than one that
+      admits its edges.</p>
+      <ul class="sec-points">
+        <li><strong>The time-lock is not cryptographic time-lock encryption.</strong> There is no VDF and no
+        threshold committee. It is a commit-reveal gated on a committed tick plus a public counter, so a
+        seller who never opens the schedule stalls the auction. Real timelock encryption would remove that
+        liveness dependency.</li>
+        <li><strong>The tick counter is not a clock.</strong> It advances when someone calls
+        <code>tick()</code>; it is not block height or wall time.</li>
+        <li><strong>Combinatorial is fixed at three lots.</strong> Exhaustive winner determination is
+        tractable precisely because five partitions fit in a circuit. General combinatorial winner
+        determination is NP-hard and would need a different approach.</li>
+        <li><strong>Batch supply is capped at three units</strong> — the clearing ladder is three fixed
+        slots, insert-sorted on reveal.</li>
+        <li><strong>Bid metadata is public by design</strong>: who bid, in what order, and when. That is
+        what makes shill detection possible, and it is also a real fingerprinting surface. Unrevealed bids
+        forfeit rather than settling.</li>
+        <li><strong>No settlement layer.</strong> This proves who won and at what price; it does not move
+        funds or escrow them.</li>
+        <li><strong>The intelligence engines are explainable heuristics, not learned models</strong>, tuned
+        on synthetic fixtures. Treat the risk scores as prompts for a human, never as verdicts.</li>
+      </ul>
+    </div>
+  </article>
+
+</main>
+
+<footer class="sec-footer">
+  <p>Compact 0.31.1 · Midnight.js 4.1.x · proofs generated locally</p>
+</footer>
+
+</body>
+</html>
