@@ -529,9 +529,13 @@ async function apiAction(body: any): Promise<any> {
       let question = String(body?.question ?? '').trim().slice(0, 140) ||
         'Guess a number from 1 to 100. Closest to two-thirds of the mean wins.';
       if (isMarket) {
-        const signal = await observeMarket();
-        marketThreshold = Math.round(signal.priceUsd);
-        question = `Prediction market: will BTC trade above $${marketThreshold.toLocaleString()} at resolution? Seal 1 (certain no) … 100 (certain yes).`;
+        if (body?.question) {
+          marketThreshold = null; // host resolves YES/NO manually
+        } else {
+          const signal = await observeMarket();
+          marketThreshold = Math.round(signal.priceUsd);
+          question = `Will BTC trade above $${marketThreshold.toLocaleString()} at resolution?`;
+        }
       }
       runJob('game-new', isMarket ? 'Opening a sealed prediction market' : 'Opening a new Number Game', async () => {
         const addr = await deployGame(gameProviders, question, isMarket ? 1 : 0);
@@ -570,6 +574,16 @@ async function apiAction(body: any): Promise<any> {
       });
       return { ok: true };
     }
+    case 'game-add-agent': {
+      const raw = String(body?.name ?? '').trim().toLowerCase().replace(/[^a-z0-9- ]/g, '').replace(/\s+/g, '-').slice(0, 20);
+      if (!raw) return { error: 'Name your agent first.' };
+      if (allForecasters().some((p) => p.name === raw)) return { error: `An agent called "${raw}" already exists.` };
+      const lo = 20 + Math.floor(Math.random() * 30);
+      customPlayers.push({ name: raw, think: () => rand(lo, lo + 35), patienceMs: [5_000, 25_000] });
+      getOrCreateIdentity(raw);
+      think(raw, 'joins the market — researching before sealing a forecast');
+      return { ok: true };
+    }
     case 'game-reckon': {
       // Fix the target, then crown the true closest — one proof each. The
       // reckoning is permissionless: a wrong target cannot prove, and anyone
@@ -578,11 +592,17 @@ async function apiAction(body: any): Promise<any> {
         const view = await readGameLedger(gameProviders, gameAddress);
         if (view.phase === 'reveal') {
           if (view.mode === 'oracle') {
-            // The oracle is an agent: resolve the event from the same live
-            // public data the forecasters researched.
-            const signal = await observeMarket();
-            const threshold = marketThreshold ?? Math.round(signal.priceUsd);
-            const outcome = signal.priceUsd > threshold ? 100n : 1n;
+            // BTC markets auto-resolve from the live feed; other events take
+            // the host's YES/NO (a human oracle, posted publicly on-chain).
+            let outcome: bigint;
+            const manual = Number(body?.outcome);
+            if (manual === 100 || manual === 1) {
+              outcome = BigInt(manual);
+            } else {
+              const signal = await observeMarket();
+              const threshold = marketThreshold ?? Math.round(signal.priceUsd);
+              outcome = signal.priceUsd > threshold ? 100n : 1n;
+            }
             await game.callTx.resolveOutcome(outcome);
           } else {
             const target = twoThirdsMean(view.revealedSum, view.revealedCount);
@@ -883,12 +903,19 @@ interface HousePlayer {
 const rand = (lo: number, hi: number) => lo + Math.floor(Math.random() * (hi - lo + 1));
 
 const HOUSE_PLAYERS: HousePlayer[] = [
-  { name: 'meridian', think: () => rand(44, 58), patienceMs: [5_000, 20_000] },   // level 0: "average is 50"
-  { name: 'vesper', think: () => rand(29, 37), patienceMs: [8_000, 25_000] },     // level 1: 2/3 of 50
-  { name: 'orpheus', think: () => rand(19, 25), patienceMs: [12_000, 32_000] },   // level 2: 2/3 of 33
-  { name: 'juno', think: () => rand(1, 100), patienceMs: [4_000, 15_000] },       // chaos: pure noise
-  { name: 'the-theorist', think: () => rand(1, 4), patienceMs: [15_000, 40_000] } // Nash: plays 0-ish, rarely wins
+  { name: 'ai-bidder-1', think: () => rand(44, 58), patienceMs: [5_000, 20_000] },  // consensus follower
+  { name: 'ai-bidder-2', think: () => rand(29, 37), patienceMs: [8_000, 25_000] },  // one level deeper
+  { name: 'ai-bidder-3', think: () => rand(19, 25), patienceMs: [12_000, 32_000] }, // two levels deep
+  { name: 'ai-bidder-4', think: () => rand(1, 100), patienceMs: [4_000, 15_000] },  // contrarian noise
+  { name: 'ai-bidder-5', think: () => rand(35, 65), patienceMs: [15_000, 40_000] }, // calibrated hedger
 ];
+
+// User-added forecaster agents (session-scoped). Same machinery as the house
+// players; the user names them and they trade on their own.
+const customPlayers: HousePlayer[] = [];
+function allForecasters(): HousePlayer[] {
+  return [...HOUSE_PLAYERS, ...customPlayers];
+}
 
 const housePlans = new Map<string, number>();
 
@@ -902,7 +929,7 @@ async function houseTick(): Promise<void> {
   }
   const addr = gameAddress;
 
-  for (const player of HOUSE_PLAYERS) {
+  for (const player of allForecasters()) {
     const key = `${addr}:${player.name}:${view.phase}`;
     const myId = await publicKeyHex(getOrCreateIdentity(player.name).secretKey);
     const sealed = view.entries.some((e) => e.id === myId);

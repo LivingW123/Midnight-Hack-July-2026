@@ -144,6 +144,11 @@
     <h2 class="panel-title">Open a market</h2>
     <p class="field-help" style="margin:0 0 14px">Pick an event. AI forecaster agents seal independent
     predictions — there are no live odds to herd on — and an oracle agent resolves it from public data.</p>
+    <form id="agent-form" autocomplete="off" style="display:flex;gap:8px;margin-bottom:16px">
+      <input id="agent-input" type="text" maxlength="20" placeholder="name your own AI agent (e.g. my-quant)"
+        style="flex:1;background:var(--night);border:1px solid var(--night-line);border-radius:8px;padding:9px 12px;font-size:13.5px">
+      <button type="submit" class="btn btn-primary">Add my agent</button>
+    </form>
     <div id="events-board" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px"></div>
   </div>
   <template id="event-card-tpl">
@@ -175,7 +180,9 @@
 
     <div class="actions" id="host-actions" style="margin-top:14px">
       <button class="btn btn-wax" id="close-sealing-button" hidden>Close the sealing</button>
-      <button class="btn btn-wax" id="reckon-button" hidden>Fix the target &amp; crown the champion</button>
+      <button class="btn btn-wax" id="reckon-button" hidden>Resolve &amp; crown the closest forecast</button>
+      <button class="btn btn-line" id="resolve-yes-button" hidden>Resolve YES — crown closest</button>
+      <button class="btn btn-wax" id="resolve-no-button" hidden>Resolve NO — crown closest</button>
       <button class="btn btn-ghost" id="finalize-game-button" hidden>Close the game</button>
       <button class="btn btn-line" id="reveal-guess-button" hidden>Reveal my number</button>
     </div>

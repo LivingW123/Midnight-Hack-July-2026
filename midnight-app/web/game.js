@@ -164,9 +164,13 @@ function render() {
   const revealBtn = $('reveal-guess-button');
   revealBtn.hidden = !(v.phase === 'reveal' && v.hasSealed && !v.hasRevealed);
   $('close-sealing-button').hidden = !(v.phase === 'sealing' && v.isHost && v.entryCount > 0);
-  $('reckon-button').hidden = !(v.phase === 'reveal' && v.isHost && v.revealedCount > 0);
+  const canReckon = v.phase === 'reveal' && v.isHost && v.revealedCount > 0;
+  const manualOracle = v.mode === 'oracle' && !(v.question || '').includes('BTC trade above');
+  $('reckon-button').hidden = !canReckon || manualOracle;
+  $('resolve-yes-button').hidden = !(canReckon && manualOracle);
+  $('resolve-no-button').hidden = !(canReckon && manualOracle);
   $('finalize-game-button').hidden = !(v.phase === 'reckoning' && v.isHost);
-  ['reveal-guess-button', 'close-sealing-button', 'reckon-button', 'finalize-game-button']
+  ['reveal-guess-button', 'close-sealing-button', 'reckon-button', 'finalize-game-button', 'resolve-yes-button', 'resolve-no-button']
     .forEach((id) => { $(id).disabled = jobActive; });
 
   // Seats at the table — visible from the moment a commitment lands.
@@ -240,23 +244,77 @@ $('guess-form').addEventListener('submit', (e) => {
   if (!guess) return;
   act({ type: 'game-seal', guess }).then((res) => { if (!res.error) input.value = ''; });
 });
-const EVENTS = [
-  { q: 'Will BTC trade above its live price at resolution?', sub: 'Threshold fixed from live research at open · auto-resolved by the oracle agent', live: true },
-  { q: 'Will the Fed cut rates at the September FOMC?', sub: 'Opens with external oracle integrations', live: false },
-  { q: 'Will a US spot-Solana ETF be approved this year?', sub: 'Opens with external oracle integrations', live: false },
-  { q: 'Will 2026 be the hottest year on record?', sub: 'Opens with external oracle integrations', live: false },
+const CATALOG = [
+  { section: 'Trending', events: [
+    { q: 'Will BTC trade above its live price at resolution?', sub: 'Threshold fixed from live research · auto-resolved by the oracle agent', auto: true },
+    { q: 'Will the Fed cut rates at the September FOMC?', sub: 'Economy · resolves on the FOMC statement' },
+    { q: 'Will OpenAI release GPT-6 before 2027?', sub: 'Tech & AI · resolves on official announcement' },
+    { q: 'Government shutdown before October?', sub: 'Politics · resolves on appropriations lapse' },
+  ]},
+  { section: 'Politics', events: [
+    { q: 'Will Democrats win the 2028 presidential election?', sub: 'Resolves on certified result' },
+    { q: 'Will JD Vance win the 2028 Republican nomination?', sub: 'Resolves at the RNC' },
+    { q: 'Will Newsom win the 2028 Democratic nomination?', sub: 'Resolves at the DNC' },
+    { q: 'New UK prime minister before 2027?', sub: 'Resolves on a change of PM' },
+    { q: 'Will the US strike a new China trade deal this year?', sub: 'Resolves on signed agreement' },
+  ]},
+  { section: 'Crypto', events: [
+    { q: 'Will Bitcoin hit $100k in 2026?', sub: 'Resolves on any venue print' },
+    { q: 'Will Solana flip $300 this year?', sub: 'Resolves on daily close' },
+    { q: 'Will a US spot-Solana ETF be approved this year?', sub: 'Resolves on SEC approval' },
+    { q: 'Will Midnight NIGHT list on a top-5 exchange in 2026?', sub: 'Resolves on listing announcement' },
+    { q: 'New all-time high for total crypto market cap this year?', sub: 'Resolves on aggregate cap' },
+  ]},
+  { section: 'Economy', events: [
+    { q: 'US recession declared in 2026?', sub: 'Resolves on NBER dating' },
+    { q: 'Will inflation print above 3% in December?', sub: 'Resolves on CPI release' },
+    { q: 'Will the S&P 500 close the year above 7,000?', sub: 'Resolves on Dec 31 close' },
+    { q: 'Gold above $3,500/oz at year end?', sub: 'Resolves on spot close' },
+  ]},
+  { section: 'Tech & AI', events: [
+    { q: 'Will Apple announce AR glasses in 2026?', sub: 'Resolves on official launch' },
+    { q: 'Will an AI system win a gold-medal IMO score this year?', sub: 'Resolves on verified result' },
+    { q: 'SpaceX Starship reaches orbit with crew before 2027?', sub: 'Resolves on crewed orbital flight' },
+    { q: 'Will Waymo operate in 20+ US cities by year end?', sub: 'Resolves on public service map' },
+  ]},
+  { section: 'Sports & Culture', events: [
+    { q: 'Will the Chiefs win Super Bowl LXI?', sub: 'Resolves on the final' },
+    { q: 'Real Madrid to win the 2026-27 Champions League?', sub: 'Resolves on the final' },
+    { q: 'Will Taylor Swift announce a 2027 world tour?', sub: 'Resolves on official announcement' },
+    { q: 'Will GTA VI ship in 2026?', sub: 'Resolves on retail release' },
+  ]},
 ];
 const board = $('events-board');
 if (board) {
-  for (const ev of EVENTS) {
-    const node = document.getElementById('event-card-tpl').content.firstElementChild.cloneNode(true);
-    node.querySelector('.ev-q').textContent = ev.q;
-    node.querySelector('.ev-sub').textContent = ev.sub;
-    if (ev.live) node.addEventListener('click', () => act({ type: 'game-new', market: true }));
-    else { node.disabled = true; node.style.opacity = 0.45; }
-    board.appendChild(node);
+  for (const sec of CATALOG) {
+    const h = document.createElement('p');
+    h.className = 'step-label';
+    h.style.cssText = 'font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--lamplight);margin:18px 0 10px;grid-column:1/-1';
+    h.textContent = sec.section;
+    board.appendChild(h);
+    for (const ev of sec.events) {
+      const node = document.getElementById('event-card-tpl').content.firstElementChild.cloneNode(true);
+      node.querySelector('.ev-q').textContent = ev.q;
+      node.querySelector('.ev-sub').textContent = ev.sub + (ev.auto ? '' : ' · host resolves YES/NO');
+      node.addEventListener('click', () =>
+        act(ev.auto ? { type: 'game-new', market: true } : { type: 'game-new', market: true, question: ev.q }));
+      board.appendChild(node);
+    }
   }
 }
+const agentForm = $('agent-form');
+if (agentForm) {
+  agentForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = $('agent-input').value.trim();
+    if (!name) return;
+    act({ type: 'game-add-agent', name }).then((r) => {
+      if (!r.error) { $('agent-input').value = ''; toast('Your agent joined. It trades on its own from here.'); }
+    });
+  });
+}
+$('resolve-yes-button')?.addEventListener('click', () => act({ type: 'game-reckon', outcome: 100 }));
+$('resolve-no-button')?.addEventListener('click', () => act({ type: 'game-reckon', outcome: 1 }));
 $('reveal-guess-button').addEventListener('click', () => act({ type: 'game-reveal' }));
 $('close-sealing-button').addEventListener('click', () => act({ type: 'game-close' }));
 $('reckon-button').addEventListener('click', () => act({ type: 'game-reckon' }));
